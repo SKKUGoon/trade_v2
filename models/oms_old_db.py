@@ -8,10 +8,8 @@ class OMS(IramModel):
     # OMS Starts at 08:00, day T.
     # OMS Ends at 09:30 day T.
 
-    def __init__(self, k: Kiwoom, strategy=21):
+    def __init__(self, strategy=21):
         super().__init__(strategy)
-        self.kiwoom = k
-        self.spec = OrderSpec(k)
         self.strat_num = strategy
         # Log
         loc = 'C:\Data\log'
@@ -85,113 +83,37 @@ class OMS(IramModel):
     def oms_prediction(self):
         return self.r['pre_corrected']
 
-    def get_asset(self):
+    def get_asset(self, spec:OrderSpec):
         """
         Gets real closing price at 15:30
             - Fetch it from the
         """
-        current = self.spec.tick_price_base()
-        asset_call, asset_put = self.spec.gen_option_code(current)
+
+        current = spec.tick_price_base()
+        print('at least here')
+        asset_call, asset_put = spec.gen_option_code(current)
         print(asset_put, asset_call)
         prediction = 'put'# TODO: original: self.oms_asset.lower()
-        action = 0 #1 # TODO: original: self.oms_prediction
+        action = 1 # TODO: original: self.oms_prediction
 
         if prediction == 'call' and action == 1:
-            self._save_asset_local(asset_call)
             self.log.debug(f'Asset is {asset_call}. Uploaded to local DB')
             return asset_call
         elif prediction == 'put' and action == 1:
-            self._save_asset_local(asset_put)
             self.log.debug(f'Asset is {asset_put}. Uploaded to local DB')
             return asset_put
         else:
             # Terminate. No Transaction
             asset = 'N/A'
-            self._save_asset_local(asset=asset)
             self.log.warning(f"Prediction value is {prediction}.")
             return False
 
-    def _save_asset_local(self, asset):
-        # [days, time, pred, asset_code]
-        start = datetime.datetime.now().strftime('%Y%m%d')
-        self.localdb.insert_rows(f'{self.strategy}',
-                                 list(self.col.keys()),
-                                 [[start, self.strategy, asset]])
-
-    def _buy_order(self, test=False):
-        # After sleep, get current price data
-        col = self.localdb.get_column_list('RT_Option')
-        val = self.localdb.select_db(col,
-                                     target_table='RT_Option')
-
-        price = float(val[0][col.index('p_buy')])
-        quantity = self.total_value / (price * 250000)
-
-        return price, math.floor(quantity)
-
-    def get_asset_local(self, t):
-        """
-        Target Assets are stored in Local DB
-        Function return asset as string value
-        """
-        for _ in range(self.max_retry):
-            try:
-                asset = self.localdb.select_db(target_column=self.col,
-                                               target_table=self.strategy,
-                                               condition1=f'days >= {t}')[0]
-                asset = asset[list(self.col.keys()).index('asset')]
-                print(asset)
-            except IndexError:
-                self.log.warning(f"No prediction input. Retrying")
-                time.sleep(5)
-            else:
-                break
-        else:
-            self.log.critical(
-                f"No prediction input after {self.max_retry} retrying attempts."
-            )
-            return None
-        return asset
-
-    def order_spec_oms(self, tick=0):
-        start = datetime.datetime.now().strftime('%Y%m%d')
-
-        asset = self.get_asset_local(start)
-        if asset is None:
-            self.log.critical(
-                f'Shut down {self.strategy} for {start}. CAUSE: No prediction'
-            )
-            return None
-
-        set_price, set_quantity = self._buy_order()
-
-        # Plus extra alphas for price
-        set_price = set_price + tick
-
-        # Make Order Sheet
-        self.oms_count = 1
-        self.screen_oms = str(self.strat_num * 100)
-
-        order_oms = {'rq_name' : f'oms{self.oms_count}',
-            'screen_num' : self.screen_oms,
-            'account' : self.kiwoom.account_num[1],
-            'code' : asset,
-            'order_type' : 1,  # 1: New, 2: Refract, 3: Cancel
-            'buy_sell' : 1,  # Selling, Buying
-            'trade_type' : 1,  # Designated Price
-            'quantity' : set_quantity,
-            'price' : set_price,
-            'order_num' : ""}
-
-        return order_oms
-
-    def sendit(self):
-        order = self.order_spec_oms()
-        self.spec.send_order_fo(**order)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     k = Kiwoom.instance()
     k.connect()
-
-    c = OMS(k)
+    o = OrderSpec(k)
+    c = OMS()
+    c.get_pred()
+    print(c.get_asset(o))
