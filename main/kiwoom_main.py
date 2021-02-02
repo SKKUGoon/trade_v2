@@ -6,7 +6,7 @@ from _util.dbms import *
 from _code.status import ReturnCode, FidList, TRKeys, RealType
 from _code.dcall_func import *
 from _util.errors import *
-from _util.api_req_chk import RequestCheck
+from _util.chk_api_count import RequestCheck
 from _util._log import *
 
 import datetime
