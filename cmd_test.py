@@ -1,4 +1,4 @@
-from _workers_v2.re_tr_workers_v2 import *
+from _workers_v2.trader import *
 from main.trade_support import TradeBotUtil
 
 from models.cms import *
@@ -38,9 +38,21 @@ class TradeBot(TradeBotUtil):
             assert co_pair is not None, 'Must designate pairs for comparison'
         self.insert_model(oms_ls, cms_ls)
         tes = self.get_standard_time(self.oms)
+        tes2 = self.get_standard_time(self.cms)
 
-        self.trd = Trader(oms_ls[0], tes, None)
+        self.trd = Trader(oms_ls[0], tes, oms_ls[0].params['TradeValue'], 2001, self.spec, test=True)
+        self.trd.get_asset.connect(self.get_model_asset)
+        self.trd.get_price.connect(self.get_rt_prc)
+        self.trd.req_compare.connect(self.chk_co_asset)
+        self.trd.log.connect(self.thread_log)
         self.trd.start()
+
+        self.trd2 = Trader(cms_ls[0], tes2, cms_ls[0].params['TradeValue'], 3001, self.spec, test=True)
+        self.trd2.get_asset.connect(self.get_model_asset)
+        self.trd2.get_price.connect(self.get_rt_prc)
+        self.trd2.req_compare.connect(self.chk_co_asset)
+        self.trd2.log.connect(self.thread_log)
+        self.trd2.start()
 
     def thread_log(self, signal: tuple):
         msg, level = signal
@@ -52,14 +64,6 @@ class TradeBot(TradeBotUtil):
             self.log.warning(msg)
         elif level.lower() == 'error':
             self.log.error(msg)
-
-    def bool_param_check(self, compare_arg):
-        if any((self.omse, self.cmse)) is False:
-            self.log.critical('No models were inserted. Terminating')
-            exit()
-
-        elif all((self.omse, self.cmse)) is False and compare_arg is True:
-            self.log.critical('Single Model were inserted ')
 
     def localdb_tables(self):
         # Create trade status
@@ -94,9 +98,6 @@ class TradeBot(TradeBotUtil):
         self.localdb.create_table(table_name=table_name,
                                   variables=param)
 
-    def go_to_status(self, state):
-        self.localdb.update_rows('trade_state', ['trade_status'], [[state]])
-
     def insert_model(self, oms, cms):
         if len(oms) == 0:
             self.omse = False
@@ -116,49 +117,88 @@ class TradeBot(TradeBotUtil):
 
         self.total = {'oms': self.oms, 'cms2': self.cms}
 
-    def set_standard_time(self, oms_time=None, cms_time=None):
-        if self.omse is False:
-            assert oms_time == dict(), f'OMS model does not exist. {oms_time} should be empty.'
-        if self.cmse is False:
-            assert cms_time == dict(), f'CMS model does not exist. {cms_time} should be empty.'
 
-        if self.ymd in self.spec.maturity:
-            self.log.critical(
-                f'Today is {self.ymd}. No Trade on Maturity Dates. Terminating Program.'
-            )
-            exit()
-        elif (self.ymd in self.spec.sat) or (self.ymd in self.spec.first_date):
-            new_o_time, new_c_time = dict(), dict()
-            if self.omse is not None:
-                for model in oms_time.keys():
-                    new_o_time[model] = {
-                        k: v + datetime.timedelta(hours=1) for k, v in oms_time[model].items()
-                    }
 
-            if self.ymd not in self.spec.sat:
-                return new_o_time, cms_time
-            else:
-                if self.cmse is not None:
-                    for model in cms_time.keys():
-                        new_c_time[model] = {
-                            k: v + datetime.timedelta(hours=1) for k, v in cms_time[model].items()
-                        }
-                return new_o_time, new_c_time
-        else:
-            return oms_time, cms_time
+    def get_model_asset(self, signal):
+
+        model, name, set_status, state_loc = signal
+        if self.trd.singleshot[set_status-1] is False:
+            model.get_pred()
+            asset = model.get_asset(self.spec)
+            file = f'./_pickles3/{name}_asset.pkl'
+            self.save_pickle_data(asset, file)
+            self.log.critical(f'Asset for {name} is generated: {asset}')
+
+        # Change model_state
+        self.save_pickle_data(set_status, state_loc)
+
+    def get_rt_prc(self, signal):
+        screen, name, set_status, state_loc = signal
+
+        # Getting real time price
+        self.live = LiveDBCon(self.kiwoom)
+        asset_file = f'./_pickles3/{name}_asset.pkl'
+        val = self.get_pickle_data(asset_file)
+        if val is not False:
+            self.live.req_opt_price(val, screen)
+            self.log.critical(f'Creating real-time price table for {val} at scr_num {screen}')
+
+        # Change model_state
+        self.save_pickle_data(set_status, state_loc)
 
     # CO-Asset Compare.
-    def chk_co_asset(self, signal: str):
+    def chk_co_asset(self, signal):
+        """
+        token = (token_number, order, sell:bool, buy:bool, partial:bool)
+        example)
+        oms_v1: token = (1, 1, True, True, True) & asset = 'A'
+        cms_v1: token = (1, 2, True, True, True) & asset = 'A'
+        -> after chk_co_asset
+        oms_v1: token = (1, 1, True, False, True) & asset = 'A'
+        cms_v1: token = (1, 2, False, True, True) & asset = 'A'
+        """
+        name, token, set_status, state_loc = signal
+
+
+
         ...
 
-    def get_rt_prc(self, signal: str):
-        ...
-        # msg, model_name, key_name, init = signal
-        # if self.executed[key_name] is True:
-        #     self.log.debug('Already executed this function')
+    # def set_standard_time(self, oms_time=None, cms_time=None):
+    #     if self.omse is False:
+    #         assert oms_time == dict(), f'OMS model does not exist. {oms_time} should be empty.'
+    #     if self.cmse is False:
+    #         assert cms_time == dict(), f'CMS model does not exist. {cms_time} should be empty.'
+    #
+    #     if self.ymd in self.spec.maturity:
+    #         self.log.critical(
+    #             f'Today is {self.ymd}. No Trade on Maturity Dates. Terminating Program.'
+    #         )
+    #         exit()
+    #     elif (self.ymd in self.spec.sat) or (self.ymd in self.spec.first_date):
+    #         new_o_time, new_c_time = dict(), dict()
+    #         if self.omse is not None:
+    #             for model in oms_time.keys():
+    #                 new_o_time[model] = {
+    #                     k: v + datetime.timedelta(hours=1) for k, v in oms_time[model].items()
+    #                 }
+    #
+    #         if self.ymd not in self.spec.sat:
+    #             return new_o_time, cms_time
+    #         else:
+    #             if self.cmse is not None:
+    #                 for model in cms_time.keys():
+    #                     new_c_time[model] = {
+    #                         k: v + datetime.timedelta(hours=1) for k, v in cms_time[model].items()
+    #                     }
+    #             return new_o_time, new_c_time
+    #     else:
+    #         return oms_time, cms_time
+
+
+
+
         # else:
         #     self.log.debug(f'{msg} for {model_name}')
-        #     self.executed[key_name] = True
         #     self.live = LiveDBCon(self.kiwoom)
         #     if int(init) == self.state['CO_Diff_OMS_Live_Price']:
         #         asset = self._open_pickle(f'./_pickles2/{model_name}_buy.pkl')

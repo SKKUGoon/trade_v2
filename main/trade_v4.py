@@ -1,4 +1,4 @@
-from _workers_v2.re_tr_workers_v2 import *
+from _workers_v2.trader import *
 from main.trade_support import TradeBotUtil
 
 from models.cms import *
