@@ -1,8 +1,8 @@
 from _workers_v2.trader import *
 from main.trade_support import TradeBotUtil
 
-from models.cms import *
-from models.oms_old_db import *
+from models.cms_v1 import *
+from models.oms_v1 import *
 # from models.oms import *
 
 from typing import List

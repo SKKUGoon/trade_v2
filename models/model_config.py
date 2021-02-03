@@ -30,6 +30,7 @@ import time
 
 
 class IramModel:
+    token = {'token_number': None, 'order': None, 'buy': True, 'sell': True, 'partial_trade': True}
     strat_name = {
         11 : 'TSF_v1', 21 : 'OMS_opt_long_v2', 31 : 'CMS_v1',  # TODO Unify Name
         12 : 'TSF_v2', 22 : 'OMS_v2', 32 : 'CMS_v2'

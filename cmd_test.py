@@ -1,8 +1,8 @@
 from _workers_v2.trader import *
 from main.trade_support import TradeBotUtil
 
-from models.cms import *
-from models.oms_old_db import *
+from models.cms_v1 import *
+from models.oms_v1 import *
 # from models.oms import *
 
 from typing import List
@@ -32,22 +32,20 @@ class TradeBot(TradeBotUtil):
         self.localdb.conn.execute("PRAGMA journal_mode=WAL")
         self.localdb_tables()
 
-        self.set_restart(self.start_status)
-
         if co_compare is True:
             assert co_pair is not None, 'Must designate pairs for comparison'
         self.insert_model(oms_ls, cms_ls)
         tes = self.get_standard_time(self.oms)
         tes2 = self.get_standard_time(self.cms)
 
-        self.trd = Trader(oms_ls[0], tes, oms_ls[0].params['TradeValue'], 2001, self.spec, test=True)
+        self.trd = Trader(oms_ls[0], tes, oms_ls[0].params['TradeValue'], 2001, self.spec)
         self.trd.get_asset.connect(self.get_model_asset)
         self.trd.get_price.connect(self.get_rt_prc)
         self.trd.req_compare.connect(self.chk_co_asset)
         self.trd.log.connect(self.thread_log)
         self.trd.start()
 
-        self.trd2 = Trader(cms_ls[0], tes2, cms_ls[0].params['TradeValue'], 3001, self.spec, test=True)
+        self.trd2 = Trader(cms_ls[0], tes2, cms_ls[0].params['TradeValue'], 3001, self.spec)
         self.trd2.get_asset.connect(self.get_model_asset)
         self.trd2.get_price.connect(self.get_rt_prc)
         self.trd2.req_compare.connect(self.chk_co_asset)
@@ -67,22 +65,7 @@ class TradeBot(TradeBotUtil):
 
     def localdb_tables(self):
         # Create trade status
-        self.__create_trade_status()
         self.__create_asset_status()
-        self.start_status = self.localdb.select_db(
-            target_column=['trade_status'], target_table='trade_state')[0][0]
-
-    def __create_trade_status(self, table_name='trade_state'):
-        param = {'trade_status': 'int'}
-        self.localdb.create_table(
-            table_name=table_name, variables=param
-        )
-        count = self.localdb.count_rows(table_name)
-        if count == 0:
-            self.localdb.insert_rows(
-                table_name,
-                col_=list(param.keys()),
-                rows_=[[self.state['Input_Models']]])
 
     def __create_asset_status(self, table_name='asset_state'):
         param = {
@@ -97,6 +80,12 @@ class TradeBot(TradeBotUtil):
         }
         self.localdb.create_table(table_name=table_name,
                                   variables=param)
+
+    def set_state(self, model_name, target_state, table_name='trade_state'):
+        self.localdb.update_rows(
+            table_name, ['trade_status'], [[target_state]], condition=f"model_name='{model_name}'"
+        )
+        self.log.critical(f'{model_name} state updated to {target_state}')
 
     def insert_model(self, oms, cms):
         if len(oms) == 0:
@@ -117,34 +106,34 @@ class TradeBot(TradeBotUtil):
 
         self.total = {'oms': self.oms, 'cms2': self.cms}
 
-
-
     def get_model_asset(self, signal):
+        model, name, save_file_loc, exec, set_status = signal
 
-        model, name, set_status, state_loc = signal
-        if self.trd.singleshot[set_status-1] is False:
+        if exec[set_status - 1] is False:
             model.get_pred()
             asset = model.get_asset(self.spec)
-            file = f'./_pickles3/{name}_asset.pkl'
+            file = f'{save_file_loc}{name}_asset.pkl'
             self.save_pickle_data(asset, file)
             self.log.critical(f'Asset for {name} is generated: {asset}')
 
         # Change model_state
-        self.save_pickle_data(set_status, state_loc)
+        self.set_state(name, set_status)
 
     def get_rt_prc(self, signal):
-        screen, name, set_status, state_loc = signal
+        screen, name, save_file_loc, exec, set_status = signal
 
         # Getting real time price
-        self.live = LiveDBCon(self.kiwoom)
-        asset_file = f'./_pickles3/{name}_asset.pkl'
-        val = self.get_pickle_data(asset_file)
-        if val is not False:
-            self.live.req_opt_price(val, screen)
-            self.log.critical(f'Creating real-time price table for {val} at scr_num {screen}')
+        if exec[set_status - 1] is False:
+
+            self.live = LiveDBCon(self.kiwoom)
+            asset_file = f'{save_file_loc}{name}_asset.pkl'
+            val = self.get_pickle_data(asset_file)
+            if val is not False:
+                self.live.req_opt_price(val, screen)
+                self.log.critical(f'Creating real-time price table for {val} at scr_num {screen}')
 
         # Change model_state
-        self.save_pickle_data(set_status, state_loc)
+        self.set_state(name, set_status)
 
     # CO-Asset Compare.
     def chk_co_asset(self, signal):
@@ -251,8 +240,8 @@ if __name__ == '__main__':
         else:
             break
 
-    oms1 = OMS(k)
-    cms1 = CMS(k)
+    oms1 = OMS(1)
+    cms1 = CMS(1)
 
     # t = TradeBot(k, [oms1], [cms1])
     # t = TradeBot(k, [oms1], [cms1], co_compare=True)

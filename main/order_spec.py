@@ -131,12 +131,12 @@ class OrderSpec(QMainWindow):
             "업종코드" : code,
             "틱범위" : freq
         }
-        dat = self.req_kw(tr_code="opt20004", **params)
-
         while True:
             try:
+                dat = self.req_kw(tr_code="opt20004", **params)
                 price = int(self._make_pretty(dat['멀티데이터'][0]['현재가'])) / 100
             except Exception as e:
+                print(e)
                 print('Price information yet to arrive. Retrying')
                 time.sleep(1)
                 continue
@@ -149,10 +149,10 @@ class OrderSpec(QMainWindow):
             "종목코드" : code,
             "시간단위" : freq
         }
-        import time
-        dat = self.req_kw(tr_code="opt50066", **params)
+
         while True:
             try:
+                dat = self.req_kw(tr_code="opt50066", **params)
                 price = float(self._make_pretty(dat['멀티데이터'][0]['현재가']))
             except Exception:
                 print("Price information yet to arrive. Retrying")

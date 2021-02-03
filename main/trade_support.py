@@ -1,7 +1,7 @@
 from _workers_v2.trader import *
 from _code.trade_state import state2 as tradestate
 
-from models.oms_old_db import *
+from models.oms_v1 import *
 
 import time
 

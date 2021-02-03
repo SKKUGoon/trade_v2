@@ -8,9 +8,10 @@ class OMS(IramModel):
     # OMS Starts at 08:00, day T.
     # OMS Ends at 09:30 day T.
 
-    def __init__(self, strategy=21):
+    def __init__(self, token, strategy=21):
         super().__init__(strategy)
         self.strat_num = strategy
+        self.token['token_number'] = token
         # Log
         loc = 'C:\Data\log'
         self.log = Logger(path=loc, name='OMS_log')
@@ -90,9 +91,7 @@ class OMS(IramModel):
         """
 
         current = spec.tick_price_base()
-        print('at least here')
         asset_call, asset_put = spec.gen_option_code(current)
-        print(asset_put, asset_call)
         prediction = 'put'# TODO: original: self.oms_asset.lower()
         action = 1 # TODO: original: self.oms_prediction
 
@@ -112,7 +111,14 @@ class OMS(IramModel):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     k = Kiwoom.instance()
-    k.connect()
+    while True:
+        try:
+            k.connect()
+        except Exception:
+            print('KIWOOM FUCK YOU and FUCK YOUR SHIT SERVER')
+            continue
+        else:
+            break
     o = OrderSpec(k)
     c = OMS()
     c.get_pred()

@@ -269,8 +269,12 @@ class LocalDBMethods2:
         c.close()
         return res
 
-    def count_rows(self, target_table):
+    def count_rows(self, target_table, condition=None):
         qry = f'SELECT COUNT(*) as cnt FROM {target_table}'
+
+        if condition is not None:
+            qry = qry + f' where {condition}'
+
         # Execute query
         c = self.conn.cursor()
         c.execute(qry)

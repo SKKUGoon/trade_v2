@@ -6,13 +6,13 @@ import math
 class CMS(IramModel):
     # CMS Starts at 15:00, day T.
     # CMS Ends at 09:00 day T+1.
-    def __init__(self, strategy=31):
+    def __init__(self, token, strategy=31):
         super().__init__(strategy)
-        self.live = None
         self.strat_num = strategy
+        self.token['token_number'] = token
 
         # Log
-        loc = 'C:\Data\log' #
+        loc = 'C:\Data\log'
         self.log = Logger(path=loc, name='CMS_log')
 
         # Create CMS asset table

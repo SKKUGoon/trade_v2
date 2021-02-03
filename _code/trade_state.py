@@ -71,7 +71,7 @@ state2 = {
 }
 
 individual = {
-    'get_asset': 0,
+    'get_asset_buy': 0,
     'get_rt_prc': 1,
     'send_main_thread': 2,
     'buy_asset': 3,
