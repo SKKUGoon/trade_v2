@@ -1,5 +1,5 @@
 from typing import Dict
-from _code.status import *
+from code_.KW_status import *
 
 
 
@@ -15,8 +15,13 @@ class TableColumns:
         'code' : 'Varchar(20)',
         'time' : 'Varchar(20)',
         'server_time': 'Varchar(20)',
+        'p_current': 'Varchar(20)',
         'p_sell': 'Varchar(20)',
         'p_buy': 'Varchar(20)'
+    }
+
+    col_time = {
+        'time' : 'Varchar(20)',
     }
 
     __fidlist_submit = getattr(FidList, 'SUBMITTED')

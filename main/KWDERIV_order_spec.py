@@ -1,9 +1,9 @@
 import configparser as cp
 import time
 
-from _code.status import TRName
-from _util.asset_code import *
-from main.kiwoom_main import *
+from code_.KW_status import TRName
+from util.UTIL_asset_code import *
+from main.KW_kiwoom_main import *
 
 from PyQt5.QtWidgets import QMainWindow
 
@@ -235,7 +235,7 @@ if __name__ == '__main__':
     k = Kiwoom.instance()
     k.connect()
     ord = OrderSpec(k)
-    a = ord.tick_price_fo('201R2422')
+    a = ord.tick_price_fo('201R5432')
     print(a)
     b = ord.tick_price_base('201R2422')
     print(b)

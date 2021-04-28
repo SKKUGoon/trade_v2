@@ -1,7 +1,7 @@
 from models.model_config import *
-from main.order_spec import *
+from main.KWDERIV_order_spec import *
 from _code.trade_state import individual as individual_trade
-from _util._log import *
+from _util.UTIL_log import *
 from _util.set_order import OrderSheet
 from models.oms_v1 import *
 from PyQt5.QtCore import *

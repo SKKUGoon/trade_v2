@@ -269,12 +269,8 @@ class LocalDBMethods2:
         c.close()
         return res
 
-    def count_rows(self, target_table, condition=None):
+    def count_rows(self, target_table):
         qry = f'SELECT COUNT(*) as cnt FROM {target_table}'
-
-        if condition is not None:
-            qry = qry + f' where {condition}'
-
         # Execute query
         c = self.conn.cursor()
         c.execute(qry)
@@ -352,7 +348,7 @@ class MySQLDBMethod:
         # Read configuration file
         if db == 'main':
             # id, pw, db_ip, db_name = process_config(configure, dbtype=db)
-            id, pw, db_ip, db_name = 'iramtrade', 'TradeIram1972', '175.114.94.22', 'iram'
+            id, pw, db_ip, db_name = 'iramtrade', 'TradeIram1972', '210.92.27.104', 'iram'
             engine_command = f'mysql+mysqlconnector://{id}:{pw}@{db_ip}:3306/{db_name}'
             self.engine = sqlalchemy.create_engine(engine_command)
         else:
@@ -554,7 +550,8 @@ class MySQLDBMethod:
 
 if __name__ == '__main__':
     loc = r'C:\Data\local_trade_test._db'
-    test = LocalDBMethods2(loc)
-    var = {'testvar1':'Varchar(20)',
-           'testvar2':'Varchar(30)'}
-    test.create_table_w_pk('testing',var, 1)
+    # test = LocalDBMethods2(loc)
+    # var = {'testvar1':'Varchar(20)',
+    #        'testvar2':'Varchar(30)'}
+    # test.create_table_w_pk('testing',var, 1)
+    test = MySQLDBMethod(None, 'main')

@@ -1,4 +1,4 @@
-from _util.chat_assist import *
+from util.UTIL_notifier import *
 
 import datetime
 import json

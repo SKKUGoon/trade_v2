@@ -2,12 +2,12 @@ from PyQt5.QAxContainer import QAxWidget
 from PyQt5.QtCore import QEventLoop
 from PyQt5.QtWidgets import QApplication
 
-from _util.dbms import *
-from _code.status import ReturnCode, FidList, TRKeys, RealType
-from _code.dcall_func import *
-from _util.errors import *
-from _util.chk_api_count import RequestCheck
-from _util._log import *
+from util.UTIL_dbms import *
+from code_.KW_status import ReturnCode, FidList, TRKeys, RealType
+from code_.TRANSLATE_dcall_func import *
+from util.UTIL_errors import *
+from util.chk_api_count import RequestCheck
+from util.UTIL_log import *
 
 import datetime
 
@@ -19,6 +19,7 @@ class Kiwoom(QAxWidget):
 
     index_val = list()
     bid_ask_val = dict()
+    servertime = dict()
 
     order_submit = dict()
     order_cancel = dict()
@@ -190,11 +191,11 @@ class Kiwoom(QAxWidget):
         :param real_data: data itself
         :return:
         """
-        if real_type not in {'업종지수', '잔고', '주식체결', '주식시세', '옵션시세', '옵션호가잔량'}:
+        if real_type not in {'업종지수', '잔고', '주식체결', '주식시세',
+                             '옵션시세', '옵션호가잔량', '장시작시간'}:
             return
         start = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
         data = [code, start]
-
         rt = getattr(RealType, 'real_type').get(real_type)
         res = {k: v for k, v in zip(rt.values(), [[] for _ in range(len(rt))])}
         for fid in getattr(RealType, 'real_type').get(real_type):
@@ -204,15 +205,15 @@ class Kiwoom(QAxWidget):
             val = val.lstrip('+')
             val = val.lstrip('-')
             data.append(val)
-        if real_type in {'옵션호가잔량'}:  # For more asset fix here:
+
+        if real_type in {'옵션시세'}:  # For more asset fix here:
             self.bid_ask_val[code] = tuple(data)  # Tuple is hashable
         elif real_type == '업종지수':
             self.index_val.append(tuple(data))
-        elif real_type == '잔고':
-            pass
+        elif real_type == '옵션호가잔량':
+            self.servertime['servertime'] = data[2]
         else:
             pass
-            #raise NotImplementedError
         return res
 
     def _receive_tr_conclude_data(self, clf, item_count, fid_list):

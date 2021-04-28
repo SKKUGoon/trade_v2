@@ -1,5 +1,5 @@
-from _code.table_col import TableColumns
-from main.order_spec import *
+from code_.LOCALDB_table_col import TableColumns
+from main.KWDERIV_order_spec import *
 
 from PyQt5.QtCore import QTimer
 
@@ -28,9 +28,11 @@ class LiveDBCon:
                                               content='transaction_exec')
         self.localdb = self.__create_local_db(table_name='RT_TR_C',
                                               content='transaction_cancel')
+        self.localdb = self.__create_local_db(table_name='RT',
+                                              content='time')
 
         # Log Connection
-        loc = 'C:\Data\log'
+        loc = r'D:\trade_db\log'
         self.log = Logger(path=loc, name='Live_DB_log')
 
         self.local_db_qry = QTimer(self.k)
@@ -56,7 +58,7 @@ class LiveDBCon:
             4. (optional) self.position_type
             5. self.col
         """
-        dbname = r'C:\Data\local_trade._db'
+        dbname = r'D:\trade_db\local_trade._db'
         localdb = LocalDBMethods2(dbname)
         localdb.conn.execute("PRAGMA journal_mode=WAL")  # To write ahead mode
         tc = TableColumns()
@@ -64,6 +66,10 @@ class LiveDBCon:
             params = tc.col_index
             localdb.create_table(table_name=table_name, variables=params)
 
+        elif content == 'time':
+            params = tc.col_time
+            localdb.create_table(table_name=table_name,
+                                 variables=params)
         elif content == 'option':
             params = tc.col_options
             pk = list(params.keys()).index('code')
@@ -122,12 +128,9 @@ class LiveDBCon:
             self.localdb.update_rows(table, col, [ind])
 
     # Live option price related methods
-    def req_opt_price(self, asset, scr_num, cols='10', test=False):
-        if test is True:
-            self.k.set_real_register("0001", '201R1375', '10', '1')
-        else:
-            self.k.set_real_register(self.scr_num, asset, cols, '1')
-            self.log.debug(f'{asset} real data stream requested')
+    def req_opt_price(self, asset, cols='10'):
+        self.k.set_real_register(self.scr_num, asset, cols, 1)
+        self.log.debug(f'{asset} real data stream requested')
 
     def _opt_p_to_local(self, table='RT_Option'):
         if len(self.k.bid_ask_val) <= 1:
@@ -165,9 +168,14 @@ class LiveDBCon:
 
         else:
             pass
+    def _time_to_local(self, table='RT'):
+        if len(k.servertime) > 0:
+            col = self.localdb.get_column_list(table)
+            self.localdb.update_rows(table, col, [k.servertime['servertime']])
 
     # Wrapper for uploading
     def live_price_wrap(self, needs=(False, True, True)):
+        self._time_to_local()
         if needs[0] is True:
             self._index_p_to_local()
         if needs[1] is True:
@@ -195,6 +203,6 @@ if __name__ == '__main__':
     k = Kiwoom.instance()
     k.connect()
     t = LiveDBCon(k)
-    t.req_opt_price(asset='201R1432', scr_num='0001', cols='10')
-    t.req_opt_price(asset='201R1435', scr_num='0001', cols='10')
+    t.req_opt_price(asset='201R5432', cols='10')
+    t.req_opt_price(asset='201R5435', cols='10')
     app.exec()

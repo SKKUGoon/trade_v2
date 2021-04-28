@@ -1,13 +1,10 @@
-from _workers_v2.trader import *
-from _code.trade_state import state2 as tradestate
-
-from models.oms_v1 import *
+from workers.THREAD_trader import *
+from code_.TRADE_trade_state import TradeState
 
 import time
 
 
 class TradeBotUtil:
-    state = tradestate
     new_start = True
     ymd = datetime.datetime.now().strftime('%Y%m%d')
 
@@ -18,16 +15,14 @@ class TradeBotUtil:
             and get real-time price.
         Also this class contains some necessary parameters
         """
-
         # Log
         self.q = Queue()
-        loc = 'C:\Data\log'
+        loc = r'D:\trade_db\log'
         self.log = Logger(path=loc, name='Trade_log', queue=self.q)
         self.log.critical('Trade Starting')
 
-    def set_restart(self, current_state):
-        if current_state != 0:
-            self.new_start = False
+        tr = TradeState()
+        state = tr.states
 
     # Utility functions.
     @staticmethod
@@ -58,19 +53,12 @@ class TradeBotUtil:
     def get_rt_price(asset, buysell, local:LocalDBMethods2,
                      orderer:OrderSpec, logger:Logger, from_table='RT_Option', timeout=30):
         col = local.get_column_list(from_table)
-        ts = time.time()
-        while time.time() - ts <= timeout:
-            try:
-                val = local.select_db(
-                    target_column=col,
-                    target_table=from_table,
-                    condition1=f"code = '{asset}'")
-                price = float(val[0][col.index(buysell)])
-                return price
-            except Exception:
-                continue
-            else:
-                break
+        val = local.select_db(
+            target_column=col,
+            target_table=from_table,
+            condition1=f"code = '{asset}'"
+        )
+        price = float(val[0][col.index(buysell)])
         logger.debug('No Live Price input, Plugging it latest price instead')
         price = orderer.tick_price_fo(asset)
         return price
