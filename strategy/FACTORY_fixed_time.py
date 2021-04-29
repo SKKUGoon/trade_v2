@@ -2,8 +2,11 @@ from strategy.STRAT_two_to_seven import *
 
 
 class FTFactory:
-    def timing(self, db):
-        return db.get_time()
+    def timing(self, strat):
+        return strat.get_state()
+
+    def naming(self, strat):
+        return strat.my_name()
 
 
 if __name__ == '__main__':
