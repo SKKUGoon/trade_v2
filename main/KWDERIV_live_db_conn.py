@@ -168,10 +168,20 @@ class LiveDBCon:
 
         else:
             pass
+
     def _time_to_local(self, table='RT'):
+        val = self.localdb.select_db(target_column=['*'],
+                                     target_table=table)
+
         if len(k.servertime) > 0:
-            col = self.localdb.get_column_list(table)
-            self.localdb.update_rows(table, col, [k.servertime['servertime']])
+            if len(val) == 0:
+                self.localdb.insert_rows(table_name=table,
+                                         col_=['time'],
+                                         rows_=[[k.servertime['servertime']]])
+            else:
+                self.localdb.update_rows(table_name=table,
+                                         set_ls=['time'],
+                                         set_val=[[k.servertime['servertime']]])
 
     # Wrapper for uploading
     def live_price_wrap(self, needs=(False, True, True)):

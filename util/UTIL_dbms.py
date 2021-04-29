@@ -184,8 +184,8 @@ class LocalDBMethods2:
         c.close()
         return res
 
-    @u_accepts({'table_name': str, 'col_': Iterable, 'rows_': Iterable})
-    def insert_rows(self, table_name: str, col_: Iterable, rows_: Iterable):
+    # @u_accepts({'table_name': str, 'col_': Iterable, 'rows_': Iterable})
+    def insert_rows(self, table_name: str, col_: Iterable, rows_: Iterable[Iterable]):
         # Multi, single combined
         columns = ', '.join(str(_) for _ in col_)
         rows = ', '.join('?' for _ in col_)
