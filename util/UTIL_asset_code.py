@@ -1,11 +1,24 @@
+from util.UTIL_dbms import MySQLDBMethod
+from typing import List
+
 import datetime
 
+
+iram = MySQLDBMethod(None, 'main')
+def get_exception_date(exception) -> List:
+    poss = {'1stBusinessDay', 'MaturityDay', 'SAT'}
+    assert exception in poss, 'Check the type of exception'
+    col = iram.get_column_list('ftsdc')
+
+    cond = f"type='{exception}'"
+    res = iram.select_db(target_table='ftsdc',
+                         target_column=col,
+                         condition=cond)
+    return [val for ty, val in res]
 
 # Strikes every 2nd Thursday
 # if Thursday is holiday:
 # Offering is moved to earlier dates.
-
-
 def _date_to_alph(date_obj: datetime.datetime, bfaf:str):
     """
     :param date_obj:
