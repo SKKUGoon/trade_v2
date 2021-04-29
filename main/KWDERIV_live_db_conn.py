@@ -116,11 +116,6 @@ class LiveDBCon:
                                     rows_=[['0']*len(params)])
         return localdb
 
-    # Live index price related methods
-    def _req_index_price(self):
-        self.log.critical(f'NOT IMPLEMENTED')
-        ...
-
     def _index_p_to_local(self, table='RealTime_Index'):
         self.log.critical(f'NOT IMPLEMENTED')
         for ind in self.k.index_val:
@@ -173,15 +168,15 @@ class LiveDBCon:
         val = self.localdb.select_db(target_column=['*'],
                                      target_table=table)
 
-        if len(k.servertime) > 0:
+        if len(self.k.servertime) > 0:
             if len(val) == 0:
                 self.localdb.insert_rows(table_name=table,
                                          col_=['time'],
-                                         rows_=[[k.servertime['servertime']]])
+                                         rows_=[[self.k.servertime['servertime']]])
             else:
                 self.localdb.update_rows(table_name=table,
                                          set_ls=['time'],
-                                         set_val=[[k.servertime['servertime']]])
+                                         set_val=[[self.k.servertime['servertime']]])
 
     # Wrapper for uploading
     def live_price_wrap(self, needs=(False, True, True)):
