@@ -68,7 +68,7 @@ class OrderSpec(QMainWindow):
         res = res.get('멀티데이터')
         for asset_info in res:
             for k, v in asset_info.items():
-                asset_info[k] = self._make_pretty(v)
+                asset_info[k] = self.make_pretty(v)
 
         have = list()  # Asset have
         had = list()  # Asset had
@@ -107,7 +107,7 @@ class OrderSpec(QMainWindow):
         return sorted(res)
 
     @staticmethod
-    def _make_pretty(val):
+    def make_pretty(val):
         val = val.replace(' ', '')
         val = val.lstrip('-')
         val = val.lstrip('+')
@@ -122,9 +122,26 @@ class OrderSpec(QMainWindow):
         d = dat['멀티데이터'][0]  # Use the most recent data
         res = dict()
         for k, v in d.items():
-            res[k] = self._make_pretty(v)
+            res[k] = self.make_pretty(v)
         price = res['현재가']
         return int(price) / 100
+
+    def minute_price_fo(self, code, freq='1') -> float:
+        params = {
+            "종목코드": code,
+            "시간단위": freq,
+        }
+        while True:
+            try:
+                dat = self.req_kw(tr_code="opt50067", **params)
+                price = float(self.make_pretty(dat['멀티데이터'][0]['현재가']))
+            except Exception:
+                time.sleep(1)
+                continue
+            else:
+                break
+
+        return dat
 
     def tick_price_base(self, code='201', freq='1') -> float:
         params = {
@@ -134,7 +151,7 @@ class OrderSpec(QMainWindow):
         while True:
             try:
                 dat = self.req_kw(tr_code="opt20004", **params)
-                price = int(self._make_pretty(dat['멀티데이터'][0]['현재가'])) / 100
+                price = int(self.make_pretty(dat['멀티데이터'][0]['현재가'])) / 100
             except Exception as e:
                 print(e)
                 print('Price information yet to arrive. Retrying')
@@ -153,7 +170,7 @@ class OrderSpec(QMainWindow):
         while True:
             try:
                 dat = self.req_kw(tr_code="opt50066", **params)
-                price = float(self._make_pretty(dat['멀티데이터'][0]['현재가']))
+                price = float(self.make_pretty(dat['멀티데이터'][0]['현재가']))
             except Exception:
                 print("Price information yet to arrive. Retrying")
                 time.sleep(1)
@@ -235,7 +252,5 @@ if __name__ == '__main__':
     k = Kiwoom.instance()
     k.connect()
     ord = OrderSpec(k)
-    a = ord.tick_price_fo('201R5432')
-    print(a)
-    b = ord.tick_price_base('201R2422')
-    print(b)
+    b = ord.tick_price_fo('201R5425')
+    c = ord.minute_price_fo('201R5425')
