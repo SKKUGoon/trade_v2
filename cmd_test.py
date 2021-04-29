@@ -1,218 +1,113 @@
-from code_.LOCALDB_table_col import TableColumns
-from main.KWDERIV_order_spec import *
+from workers.THREAD_trader import *
 
-from PyQt5.QtCore import QTimer
+from util.UTIL_dbms import *
+from util.UTIL_asset_code import *
+from main.TRADE_trade_back import TradeBotUtil
+from main.KWDERIV_order_spec import OrderSpec
+from main.KWDERIV_live_db_conn import LiveDBCon
+from workers.THREAD_event_work import ServerTimeEvent
 
 
-class LiveDBCon:
-    """
-    class handles functions associated with DB connection.
-    """
-    def __init__(self, k:Kiwoom, termination=datetime.timedelta(hours=1),
-                 strategy='CO', screen_num='0001'):
-        # Kiwoom Api Connection
+from strategy import *
+from strategy.STRAT_two_to_seven import FTTwoSeven
+from strategy.FACTORY_fixed_time import FTFactory
+import sys
 
-        self.k = k
+from typing import List
+from queue import Queue
+import pickle
+import time
+import copy
 
-        self.scr_num = screen_num
-        self.start = datetime.datetime.now()
-        self.termination = termination  # 2hours
-        self.strategy = strategy
+assert sys.version_info >= (3, 6), f'python version should be 3.6 or higher'
 
-        # Local DB connection
-        self.localdb = self.__create_local_db(table_name='RT_Option',
-                                              content='option')
-        self.localdb = self.__create_local_db(table_name='RT_TR_S',
-                                              content='transaction_subm')
-        self.localdb = self.__create_local_db(table_name='RT_TR_E',
-                                              content='transaction_exec')
-        self.localdb = self.__create_local_db(table_name='RT_TR_C',
-                                              content='transaction_cancel')
-        self.localdb = self.__create_local_db(table_name='RT',
-                                              content='time')
 
-        # Log Connection
-        loc = r'D:\trade_db\log'
-        self.log = Logger(path=loc, name='Live_DB_log')
+class TradeBot(TradeBotUtil):
+    def __init__(self, k:Kiwoom, fixed_time_strat:FTManager):
+        print('This Module is to purchase 2 ~ 7 Put Option.')
+        # Necessary Modules
+        super().__init__()
+        self.kiwoom = k
 
-        self.local_db_qry = QTimer(self.k)
-        self.local_db_qry.start(100 * 0.1)
-        self.local_db_qry.timeout.connect(self.live_price_wrap)
+        print('Please insert Opening Index >>>')
+        a = float(input())
+        atm = self.create_atm(a)
 
-        self.stop_cond = QTimer(self.k)
-        self.stop_cond.start(1000 * 0.1)
-        self.stop_cond.timeout.connect(self.real_remove_reg)
+        # Helper Modules
+        self.spec = OrderSpec(k)
+        self.live = LiveDBCon(k)
+        self.live.req_opt_price(asset=atm, cols='10')
+        self.thread_tasks()
+        # Start Time
 
-        self.condition_check = QTimer(self.k)
-        self.condition_check.start(10000)
-        self.condition_check.timeout.connect(
-            lambda: self.log.debug(f"{datetime.datetime.now()} Connected")
-        )
+        # DB Connectivity
+        loc = r'D:\trade_db\local_trade._db'
+        self.localdb = LocalDBMethods2(loc)
+        self.localdb.conn.execute("PRAGMA journal_mode=WAL")
 
-    def __create_local_db(self, table_name, content='option'):
-        """
-        :return:
-            1. self.dbname
-            2. self.order_type
-            3. self.order_method
-            4. (optional) self.position_type
-            5. self.col
-        """
-        dbname = r'D:\trade_db\local_trade._db'
-        localdb = LocalDBMethods2(dbname)
-        localdb.conn.execute("PRAGMA journal_mode=WAL")  # To write ahead mode
-        tc = TableColumns()
-        if content == 'index':
-            params = tc.col_index
-            localdb.create_table(table_name=table_name, variables=params)
+        self.iram = MySQLDBMethod(None, 'main')
 
-        elif content == 'time':
-            params = tc.col_time
-            localdb.create_table(table_name=table_name,
-                                 variables=params)
-        elif content == 'option':
-            params = tc.col_options
-            pk = list(params.keys()).index('code')
-            localdb.create_table_w_pk(table_name=table_name,
-                                      variables=params,
-                                      pk_loc=pk)
-            count = localdb.count_rows(table_name)
-            if count == 0:
-                localdb.insert_rows(table_name,
-                                    col_=list(params.keys()),
-                                    rows_=[['0']*len(params)])  # One must insert something to update the value
-        elif content == 'transaction_exec':
-            params = tc.order_exec
-            pk = list(params.keys()).index('SCREEN_NUM')
-            localdb.create_table_w_pk(table_name=table_name,
-                                      variables=params,
-                                      pk_loc=pk)
-            count = localdb.count_rows(table_name)
-            if count == 0:
-                localdb.insert_rows(table_name,
-                                    col_=list(params.keys()),
-                                    rows_=[['0']*len(params)])
-        elif content == 'transaction_subm':
-            params = tc.order_subm
-            pk = list(params.keys()).index('SCREEN_NUM')
-            localdb.create_table_w_pk(table_name=table_name,
-                                      variables=params,
-                                      pk_loc=pk)
-            count = localdb.count_rows(table_name)
-            if count == 0:
-                localdb.insert_rows(table_name,
-                                    col_=list(params.keys()),
-                                    rows_=[['0']*len(params)])
-        elif content == 'transaction_cancel':
-            params = tc.order_cancel
-            pk = list(params.keys()).index('SCREEN_NUM')
-            localdb.create_table_w_pk(table_name=table_name,
-                                      variables=params,
-                                      pk_loc=pk)
-            count = localdb.count_rows(table_name)
-            if count == 0:
-                localdb.insert_rows(table_name,
-                                    col_=list(params.keys()),
-                                    rows_=[['0']*len(params)])
-        return localdb
+    def create_atm(self, index_value, type_='put_option'):
+        mat = get_exception_date('MaturityDay')
+        target = None
+        for days in mat:
+            if days[:6] == self.ymd[0:6]:
+                print(days, self.ymd)
+                target = days
 
-    # Live index price related methods
-    def _req_index_price(self):
-        self.log.critical(f'NOT IMPLEMENTED')
+        if target is None:
+            raise RuntimeError("Please insert new maturity date.")
+
+        # Before or after the target maturity date
+        if self.ymd <= target:
+            ba = 'before'
+        else:
+            ba = 'after'
+
+        asset = asset_code_gen(index_value, type_, datetime.datetime.now(), ba)
+        return asset
+
+    def thread_tasks(self):
+        threads = QThreadPool.globalInstance().maxThreadCount()
+        pool = QThreadPool.globalInstance()
+        tgt = ServerTimeEvent(['152510', '152610'])
+        pool.start(tgt)
+
+
+    def thread_log(self, signal: tuple):
+        msg, level = signal
+        if level.lower() == 'debug':
+            self.log.debug(msg)
+        elif level.lower() == 'critical':
+            self.log.critical(msg)
+        elif level.lower() == 'warning':
+            self.log.warning(msg)
+        elif level.lower() == 'error':
+            self.log.error(msg)
+
+    def get_asset(self):
+        a = self.spec.tick_price_base()
+        print(a)
         ...
 
-    def _index_p_to_local(self, table='RealTime_Index'):
-        self.log.critical(f'NOT IMPLEMENTED')
-        for ind in self.k.index_val:
-            col = self.localdb.get_column_list(table)
-            self.localdb.update_rows(table, col, [ind])
+    def set_standard_time(self):
 
-    # Live option price related methods
-    def req_opt_price(self, asset, cols='10'):
-        self.k.set_real_register(self.scr_num, asset, cols, 1)
-        self.log.debug(f'{asset} real data stream requested')
+        ...
 
-    def _opt_p_to_local(self, table='RT_Option'):
-        if len(self.k.bid_ask_val) <= 1:
-            for values in self.k.bid_ask_val.values():  #
-                col = self.localdb.get_column_list(table)
-
-                self.localdb.update_rows(table, col, [values])
-        elif len(self.k.bid_ask_val) > 1:
-            keys_ = self.k.bid_ask_val.keys()
-
-            for key, values in self.k.bid_ask_val.items():
-                col = self.localdb.get_column_list(table)
-
-                self.localdb.insert_database(table, col, [values],
-                                             'upsert', key='code')
-
-    # Transaction Complete related Method
-    def _tr_to_local(self, table=('RT_TR_S', 'RT_TR_E', 'RT_TR_C')):
-
-        values = [list(self.k.order_submit.values()),
-                  list(self.k.order_execute.values()),
-                  list(self.k.order_cancel.values())]
-        values = [self.k.order_submit,
-                  self.k.order_execute,
-                  self.k.order_cancel]
-        today = datetime.datetime.now().strftime('%Y%m%d')
-        for t, dict_val in zip(table, values):
-            if len(dict_val) != 0:
-                self.localdb.insert_database(t,
-                                             list(dict_val.keys()),
-                                             [list(dict_val.values())],
-                                             'upsert',
-                                             key='SCREEN_NUM')
-                # self.localdb.update_table_fromdict(t, dict_val)
-
-        else:
-            pass
-
-    def _time_to_local(self, table='RT'):
-        val = self.localdb.select_db(target_column=['*'],
-                                     target_table=table)
-
-        if len(k.servertime) > 0:
-            if len(val) == 0:
-                self.localdb.insert_rows(table_name=table,
-                                         col_=['time'],
-                                         rows_=[[k.servertime['servertime']]])
-            else:
-                self.localdb.update_rows(table_name=table,
-                                         set_ls=['time'],
-                                         set_val=[[k.servertime['servertime']]])
-
-    # Wrapper for uploading
-    def live_price_wrap(self, needs=(False, True, True)):
-        self._time_to_local()
-        if needs[0] is True:
-            self._index_p_to_local()
-        if needs[1] is True:
-            self._opt_p_to_local()
-        if needs[2] is True:
-            self._tr_to_local()
-
-    def real_remove_reg(self):
-        """
-        Enforce set real reg to work only for "self.termination"
-        """
-        time_cond = (
-                datetime.datetime.now() >= self.start + self.termination
-        )
-        if time_cond:
-            self.k.set_real_remove('ALL', 'ALL')
-
-            self.log.debug(f'{datetime.datetime.now()} Real Data Stream Halted')
-        else:
-            pass
+    def get_rt_prc(self, signal: str):
+        ...
 
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     k = Kiwoom.instance()
-    k.connect()
-    t = LiveDBCon(k)
-    t.req_opt_price(asset='201R5432', cols='10')
-    t.req_opt_price(asset='201R5435', cols='10')
+    for i in range(10):
+        try:
+            k.connect()
+        except:
+            print('kiwoom connect retry')
+            time.sleep(10)
+        else:
+            break
+    trd = TradeBot(k, [FTTwoSeven()])
     app.exec()
