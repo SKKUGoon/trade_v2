@@ -1,8 +1,16 @@
 from workers.THREAD_trader import *
 
 from util.UTIL_dbms import *
+from util.UTIL_asset_code import *
 from main.TRADE_trade_back import TradeBotUtil
+from main.KWDERIV_order_spec import OrderSpec
+from main.KWDERIV_live_db_conn import LiveDBCon
+from workers.THREAD_event_work import ServerTimeEvent
 
+
+from strategy import *
+from strategy.STRAT_two_to_seven import FTTwoSeven
+from strategy.FACTORY_fixed_time import FTFactory
 import sys
 
 from typing import List
@@ -15,17 +23,71 @@ assert sys.version_info >= (3, 6), f'python version should be 3.6 or higher'
 
 
 class TradeBot(TradeBotUtil):
-
-    def __init__(self, k:Kiwoom, fixed_time_strat:int):
+    def __init__(self, k:Kiwoom, fixed_time_strat:FTManager):
+        print('This Module is to purchase 2 ~ 7 Put Option.')
         # Necessary Modules
         super().__init__()
         self.kiwoom = k
         self.spec = OrderSpec(k)
 
+        # Train Model Ahead of time
+        self.model = ...
+
+
+        print('Please insert Opening Index >>>')
+        a = float(input())  # Input index by hand
+        atm = self.create_atm(a)
+        self.opening = self.get_opening(atm)
+
+        # Helper Modules
+
+        self.live = LiveDBCon(k)
+        self.live.req_opt_price(asset=atm, cols='10')
+        self.thread_tasks()
+        # Start Time
+
         # DB Connectivity
-        loc = r'C:\Data\local_trade._db'
+        loc = r'D:\trade_db\local_trade._db'
         self.localdb = LocalDBMethods2(loc)
         self.localdb.conn.execute("PRAGMA journal_mode=WAL")
+
+        self.iram = MySQLDBMethod(None, 'main')
+
+    def get_opening(self, asset) -> str:
+        dat = self.spec.minute_price_fo(asset)
+        res = list()
+        for i in dat['멀티데이터']:
+            t = self.spec.make_pretty(i['체결시간'])
+            if t[:8] == datetime.datetime.now().strftime('%Y%m%d'):
+                res.append(i)
+        start = self.spec.make_pretty(res[-1]['시가'])
+        return start
+
+    def create_atm(self, index_value, type_='put_option'):
+        mat = get_exception_date('MaturityDay')
+        target = None
+        for days in mat:
+            if days[:6] == self.ymd[0:6]:
+                print(days, self.ymd)
+                target = days
+
+        if target is None:
+            raise RuntimeError("Please insert new maturity date.")
+
+        # Before or after the target maturity date
+        if self.ymd <= target:
+            ba = 'before'
+        else:
+            ba = 'after'
+
+        asset = asset_code_gen(index_value, type_, datetime.datetime.now(), ba)
+        return asset
+
+    def thread_tasks(self):
+        threads = QThreadPool.globalInstance().maxThreadCount()
+        pool = QThreadPool.globalInstance()
+        tgt = ServerTimeEvent(self.opening, self.spec, ['152510', '152610'])
+        pool.start(tgt)
 
 
     def thread_log(self, signal: tuple):
@@ -39,11 +101,6 @@ class TradeBot(TradeBotUtil):
         elif level.lower() == 'error':
             self.log.error(msg)
 
-    def set_standard_time(self):
-        ...
-
-    def get_rt_prc(self, signal: str):
-        ...
 
 
 if __name__ == '__main__':
@@ -57,5 +114,5 @@ if __name__ == '__main__':
             time.sleep(10)
         else:
             break
-
+    trd = TradeBot(k, [FTTwoSeven()])
     app.exec()

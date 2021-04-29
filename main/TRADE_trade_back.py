@@ -1,5 +1,4 @@
 from workers.THREAD_trader import *
-from code_.TRADE_trade_state import TradeState
 
 import time
 
@@ -20,9 +19,6 @@ class TradeBotUtil:
         loc = r'D:\trade_db\log'
         self.log = Logger(path=loc, name='Trade_log', queue=self.q)
         self.log.critical('Trade Starting')
-
-        tr = TradeState()
-        state = tr.states
 
     # Utility functions.
     @staticmethod
