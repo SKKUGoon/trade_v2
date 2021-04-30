@@ -52,6 +52,13 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="\models\MODEL_2to7.py">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="\strategy\2to7.py">
           <value>
             <Attribute>
