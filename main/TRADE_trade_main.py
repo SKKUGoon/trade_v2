@@ -2,15 +2,18 @@ from workers.THREAD_trader import *
 
 from util.UTIL_dbms import *
 from util.UTIL_asset_code import *
+
 from main.TRADE_trade_back import TradeBotUtil
 from main.KWDERIV_order_spec import OrderSpec
 from main.KWDERIV_live_db_conn import LiveDBCon
+
+from strategy.STRAT_two_to_seven import FTTwoSeven
+from strategy.FACTORY_fixed_time import FTFactory, FTManager
+
+from models.MODEL_2to7 import VanillaTradeSVM
+
 from workers.THREAD_event_work import ServerTimeEvent
 
-
-from strategy import *
-from strategy.STRAT_two_to_seven import FTTwoSeven
-from strategy.FACTORY_fixed_time import FTFactory
 import sys
 
 from typing import List
@@ -23,7 +26,10 @@ assert sys.version_info >= (3, 6), f'python version should be 3.6 or higher'
 
 
 class TradeBot(TradeBotUtil):
-    def __init__(self, k:Kiwoom, fixed_time_strat:FTManager):
+    """
+    Execute this Bot at 09:01:00
+    """
+    def __init__(self, k:Kiwoom, model:FTManager):
         print('This Module is to purchase 2 ~ 7 Put Option.')
         # Necessary Modules
         super().__init__()
@@ -31,22 +37,27 @@ class TradeBot(TradeBotUtil):
         self.spec = OrderSpec(k)
 
         # Train Model Ahead of time
-        self.model = ...
-
+        d = FTFactory()
+        # 2 to 7 model
+        m_2t7 = VanillaTradeSVM(r'\2to7')
+        m_2t7.fit_()
+        self.m_2t7_trained = m_2t7.save_model()
+        self.m_2t7_tl, self.m_2t7_tlm = d.timing(model)
+        print(self.m_2t7_tl, self.m_2t7_tlm)
 
         print('Please insert Opening Index >>>')
-        a = float(input())  # Input index by hand
-        atm = self.create_atm(a)
-        self.opening = self.get_opening(atm)
+        a = float(input())  # Input index by hand TODO: Automate
+        self.atm = self.create_atm(a)
+        self.opening = self.get_opening(self.atm)
 
-        # Helper Modules
-
+        # Live Price
         self.live = LiveDBCon(k)
-        self.live.req_opt_price(asset=atm, cols='10')
-        self.thread_tasks()
-        # Start Time
+        self.live.req_opt_price(asset=self.atm, cols='10')
 
-        # DB Connectivity
+        # Start Thread
+        self.thread_tasks()
+
+        # DB Connect
         loc = r'D:\trade_db\local_trade._db'
         self.localdb = LocalDBMethods2(loc)
         self.localdb.conn.execute("PRAGMA journal_mode=WAL")
@@ -86,7 +97,13 @@ class TradeBot(TradeBotUtil):
     def thread_tasks(self):
         threads = QThreadPool.globalInstance().maxThreadCount()
         pool = QThreadPool.globalInstance()
-        tgt = ServerTimeEvent(self.opening, self.spec, ['152510', '152610'])
+        tgt = ServerTimeEvent(opening=self.opening,
+                              orderspec=self.spec,
+                              models=self.m_2t7_trained,
+                              asset=self.atm,
+                              data_time=self.m_2t7_tl,
+                              time_limit=self.m_2t7_tlm)
+        # Add Additional Threads
         pool.start(tgt)
 
 
@@ -114,5 +131,5 @@ if __name__ == '__main__':
             time.sleep(10)
         else:
             break
-    trd = TradeBot(k, [FTTwoSeven()])
+    trd = TradeBot(k, FTTwoSeven())
     app.exec()
