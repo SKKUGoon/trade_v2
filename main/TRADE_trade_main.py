@@ -29,12 +29,14 @@ class TradeBot(TradeBotUtil):
     """
     Execute this Bot at 09:01:00
     """
+    ymd = '20210430'
     def __init__(self, k:Kiwoom, model:FTManager):
         print('This Module is to purchase 2 ~ 7 Put Option.')
         # Necessary Modules
         super().__init__()
         self.kiwoom = k
         self.spec = OrderSpec(k)
+        self.live = LiveDBCon(k)
 
         # Train Model Ahead of time
         d = FTFactory()
@@ -43,15 +45,13 @@ class TradeBot(TradeBotUtil):
         m_2t7.fit_()
         self.m_2t7_trained = m_2t7.save_model()
         self.m_2t7_tl, self.m_2t7_tlm = d.timing(model)
-        print(self.m_2t7_tl, self.m_2t7_tlm)
 
-        print('Please insert Opening Index >>>')
-        a = float(input())  # Input index by hand TODO: Automate
+        a = float(self.get_opening_index()) / 100
+        print(a)
         self.atm = self.create_atm(a)
-        self.opening = self.get_opening(self.atm)
+        self.opening = self.get_opening_opt(self.atm)
 
         # Live Price
-        self.live = LiveDBCon(k)
         self.live.req_opt_price(asset=self.atm, cols='10')
 
         # Start Thread
@@ -64,13 +64,24 @@ class TradeBot(TradeBotUtil):
 
         self.iram = MySQLDBMethod(None, 'main')
 
-    def get_opening(self, asset) -> str:
+    def get_opening_index(self) -> str:
+        dat = self.spec.minute_price_base()
+        res = list()
+        for info in dat['멀티데이터']:
+            t = self.spec.make_pretty(info['체결시간'])
+            if t[:8] == self.ymd:
+                res.append(info)
+        start = self.spec.make_pretty(res[-1]['시가'])
+        return start
+
+
+    def get_opening_opt(self, asset) -> str:
         dat = self.spec.minute_price_fo(asset)
         res = list()
-        for i in dat['멀티데이터']:
-            t = self.spec.make_pretty(i['체결시간'])
-            if t[:8] == datetime.datetime.now().strftime('%Y%m%d'):
-                res.append(i)
+        for info in dat['멀티데이터']:
+            t = self.spec.make_pretty(info['체결시간'])
+            if t[:8] == self.ymd:
+                res.append(info)
         start = self.spec.make_pretty(res[-1]['시가'])
         return start
 
@@ -117,7 +128,6 @@ class TradeBot(TradeBotUtil):
             self.log.warning(msg)
         elif level.lower() == 'error':
             self.log.error(msg)
-
 
 
 if __name__ == '__main__':

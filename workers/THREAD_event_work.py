@@ -15,8 +15,7 @@ import pickle
 class ServerTimeEvent(QRunnable):
     def __init__(self, opening, orderspec:OrderSpec, models, asset, data_time:List, time_limit:List):
         super().__init__()
-        self.timeline = data_time
-        self.timelimit = time_limit
+        self.timeline, self.timelimit = data_time, time_limit
         self.op = opening
         self.order = orderspec
         self.models = models
@@ -27,6 +26,9 @@ class ServerTimeEvent(QRunnable):
         loc = r'D:\trade_db\local_trade._db'
         self.local = LocalDBMethods2(loc)
         self.local.conn.execute("PRAGMA journal_mode=WAL")
+
+        # Account information
+        money = self.order.get_fo_margin_info(self.ord.k.account_num[0])
 
         # Get
         target = 0
@@ -57,7 +59,7 @@ class ServerTimeEvent(QRunnable):
                 break
 
         res = get_cumul_return(
-            list(map(lambda x: float(x),res))
+            list(map(lambda x: float(x), res))
         )[1:]
 
         # Gather Data
@@ -65,8 +67,9 @@ class ServerTimeEvent(QRunnable):
                      models[1].decision_function([res])[0]]
         if models[2].predict([cscr_pred])[0] is True:  # If True, enter market
             print('Signal On')
+            q = money // time[1]
             sheet = order_base(name='tts', scr_num='1000', account=self.order.k.account_num[0],
-                               asset=self.asset, buy_sell=2, trade_type=3, quantity=1, price=0)
+                               asset=self.asset, buy_sell=2, trade_type=3, quantity=q, price=0)
             self.order.send_order_fo(**sheet)
         else:
             print('Signal Off. Terminating')

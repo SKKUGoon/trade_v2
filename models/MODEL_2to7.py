@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 import pickle
 import datetime
-
+import os
 
 class VanillaTradeSVM():
     data_path = r'D:\trade_db\fixed_time_strategy_data'
@@ -17,6 +17,7 @@ class VanillaTradeSVM():
     def __init__(self, path_name:str):
         self.data_path = self.data_path + path_name
         self.model_path = self.model_path + path_name
+
         self._set_models()
 
     def _set_models(self, box_const=1, kappa='rbf', g='scale', class_w=None):

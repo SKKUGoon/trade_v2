@@ -57,12 +57,18 @@ class OrderSpec(QMainWindow):
         else:
             raise OrderSpecError(f'{target_var} not in data list')
 
+    def get_fo_margin_info(self, account):
+        res = self.req_kw('OPW20010', **{'계좌번호': account})
+        res = res['싱글데이터']
+        return int(res['주문가능현금'])
+
     def get_fo_deposit_info(self, account):
         col = {
             '계좌번호': 'account_num',
             '종목코드': 'asset_code',
             '보유수량': 'quantity',
-            '총매입가': 'tv'
+            '총매입가': 'tv',
+            '예수금': 'account_value',
         }
         res = self.req_kw('OPT50027', **{'계좌번호': account})
         res = res.get('멀티데이터')
@@ -124,7 +130,7 @@ class OrderSpec(QMainWindow):
         for k, v in d.items():
             res[k] = self.make_pretty(v)
         price = res['현재가']
-        return int(price) / 100
+        return dat
 
     def minute_price_fo(self, code, freq='1') -> float:
         params = {
@@ -247,6 +253,7 @@ class OrderSpec(QMainWindow):
 
         # return getattr(self.k, 'order_response')
 
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     k = Kiwoom.instance()
@@ -254,3 +261,5 @@ if __name__ == '__main__':
     ord = OrderSpec(k)
     b = ord.tick_price_fo('201R5425')
     c = ord.minute_price_fo('201R5425')
+    d = ord.minute_price_base()
+    ord.get_fo_deposit_info(k.account_num[0])
