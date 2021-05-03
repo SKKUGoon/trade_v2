@@ -1,13 +1,14 @@
 from sklearn.svm import SVC
-from sklearn.preprocessing import StandardScaler
 
+from data.DATA_2to7_update import *
 from util.UTIL_data_convert import *
+from util.UTIL_log import Logger
 
 import pandas as pd
 import numpy as np
 import pickle
 import datetime
-import os
+
 
 class VanillaTradeSVM():
     data_path = r'D:\trade_db\fixed_time_strategy_data'
@@ -17,7 +18,7 @@ class VanillaTradeSVM():
     def __init__(self, path_name:str):
         self.data_path = self.data_path + path_name
         self.model_path = self.model_path + path_name
-
+        self.logger = Logger(r'D:\trade_db\log')
         self._set_models()
 
     def _set_models(self, box_const=1, kappa='rbf', g='scale', class_w=None):
@@ -40,14 +41,23 @@ class VanillaTradeSVM():
         )  # Model that Combines Model 1 and Model 2
 
     def get_data_2to7(self, week=156):
-        x1 = pd.read_csv(self.data_path + r'\index_features.csv', index_col=0)
-        x2 = pd.read_csv(self.data_path + r'\open_return_features.csv', index_col=0)
+        # Data update
+        update_index_us()
+        update_index_kor()
+        idx_features = index_features(np.nan, np.nan)
+        update_opt_path(idx_features)
+        opt_features = option_features()
 
-        y = pd.read_csv(self.data_path + r'\open_return_2_7_put.csv', index_col=0)
+        feat = gen_features(index_features=idx_features,
+                            option_features=opt_features)
+
+        y = gen_target(feat)
         s, f = set_train_period(self.today, week)
 
-        self.x1 = x1.loc[(x1.index >= s) & (x1.index <= f)]
-        self.x2 = x2.loc[(x2.index >= s) & (x2.index <= f)]
+        self.x1 = idx_features.loc[(idx_features.index >= s)
+                                   & (idx_features.index <= f)]
+        self.x2 = opt_features.loc[(opt_features.index >= s)
+                                   & (opt_features.index <= f)]
         self.y = y.loc[(y.index >= s) & (y.index <= f)]
 
     def fit_(self, train_week=156):
@@ -55,8 +65,10 @@ class VanillaTradeSVM():
 
         self.model1.gamma = get_gamma(self.x1)
         self.model1.fit(self.x1, (self.y >= 0))
+        self.logger.critical(['[2to7] >>> Model 1 Fitted'])
 
         self.model2.fit(self.x2, (self.y >= 0))
+        self.logger.critical(['[2to7] >>> Model 2 Fitted'])
 
         c_scr1 = pd.DataFrame(
             self.model1.decision_function(self.x1),
@@ -71,6 +83,7 @@ class VanillaTradeSVM():
             pd.concat([c_scr1, c_scr2], axis=1),
             (self.y >= 0)
         )
+        self.logger.critical(['[2to7] >>> Model Double SVM Fitted'])
 
     def save_model(self, names=('tts_m1', 'tts_m2', 'tts_m3')):
         file = [self.model1, self.model2, self.model3]
