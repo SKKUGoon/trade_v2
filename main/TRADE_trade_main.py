@@ -1,3 +1,5 @@
+from PyQt5.QtCore import QTimer
+
 from workers.THREAD_trader import *
 
 from util.UTIL_dbms import *
@@ -7,20 +9,15 @@ from main.TRADE_trade_back import TradeBotUtil
 from main.KWDERIV_order_spec import OrderSpec
 from main.KWDERIV_live_db_conn import LiveDBCon
 
-from strategy.STRAT_two_to_seven import FTTwoSeven
-from strategy.FACTORY_fixed_time import FTFactory, FTManager
-
-from models.MODEL_2to7 import VanillaTradeSVM
-
-from workers.THREAD_event_work import ServerTimeEvent
-
-import sys
+from workers.THREAD_event_work import TwoToSeven
+from workers.THREAD_cms_ import CMS, CMSExt
 
 from typing import List
 from queue import Queue
 import pickle
 import time
 import copy
+import sys
 
 assert sys.version_info >= (3, 6), f'python version should be 3.6 or higher'
 
@@ -29,33 +26,18 @@ class TradeBot(TradeBotUtil):
     """
     Execute this Bot at 09:01:00
     """
-    ymd = '20210430'
-    def __init__(self, k:Kiwoom, model:FTManager):
+    def __init__(self, k:Kiwoom):
         print('This Module is to purchase 2 ~ 7 Put Option.')
         # Necessary Modules
         super().__init__()
         self.kiwoom = k
         self.spec = OrderSpec(k)
         self.live = LiveDBCon(k)
-
-        # Train Model Ahead of time
-        d = FTFactory()
-        # 2 to 7 model
-        m_2t7 = VanillaTradeSVM(r'\2to7')
-        m_2t7.fit_()
-        self.m_2t7_trained = m_2t7.save_model()
-        self.m_2t7_tl, self.m_2t7_tlm = d.timing(model)
-
-        a = float(self.get_opening_index()) / 100
-        print(a)
-        self.atm = self.create_atm(a)
-        self.opening = self.get_opening_opt(self.atm)
-
-        # Live Price
-        self.live.req_opt_price(asset=self.atm, cols='10')
+        self.morning = self._morn_status()
 
         # Start Thread
-        self.thread_tasks()
+        self.create_threadpool()
+        self.timer_start_thread()
 
         # DB Connect
         loc = r'D:\trade_db\local_trade._db'
@@ -64,70 +46,94 @@ class TradeBot(TradeBotUtil):
 
         self.iram = MySQLDBMethod(None, 'main')
 
-    def get_opening_index(self) -> str:
-        dat = self.spec.minute_price_base()
-        res = list()
-        for info in dat['멀티데이터']:
-            t = self.spec.make_pretty(info['체결시간'])
-            if t[:8] == self.ymd:
-                res.append(info)
-        start = self.spec.make_pretty(res[-1]['시가'])
-        return start
+    def _time_until(self, target:datetime.datetime, unit='msec'):
+        called = datetime.datetime.strptime(
+            datetime.datetime.now().strftime(self.time_format),
+            self.time_format
+        )
 
+        until = (target - called).seconds
+        print((target - called).days)
 
-    def get_opening_opt(self, asset) -> str:
-        dat = self.spec.minute_price_fo(asset)
-        res = list()
-        for info in dat['멀티데이터']:
-            t = self.spec.make_pretty(info['체결시간'])
-            if t[:8] == self.ymd:
-                res.append(info)
-        start = self.spec.make_pretty(res[-1]['시가'])
-        return start
-
-    def create_atm(self, index_value, type_='put_option'):
-        mat = get_exception_date('MaturityDay')
-        target = None
-        for days in mat:
-            if days[:6] == self.ymd[0:6]:
-                print(days, self.ymd)
-                target = days
-
-        if target is None:
-            raise RuntimeError("Please insert new maturity date.")
-
-        # Before or after the target maturity date
-        if self.ymd <= target:
-            ba = 'before'
+        print(until)
+        if unit == 'msec':
+            return until * 1000
         else:
-            ba = 'after'
+            return until
 
-        asset = asset_code_gen(index_value, type_, datetime.datetime.now(), ba)
-        return asset
+    def _morn_status(self):
+        if self.hms <= '120000':
+            return True
+        else:
+            return False
 
-    def thread_tasks(self):
+    # Thread Related
+    def create_threadpool(self):
+        self.log.critical('ThreadPool Generated')
         threads = QThreadPool.globalInstance().maxThreadCount()
-        pool = QThreadPool.globalInstance()
-        tgt = ServerTimeEvent(opening=self.opening,
-                              orderspec=self.spec,
-                              models=self.m_2t7_trained,
-                              asset=self.atm,
-                              data_time=self.m_2t7_tl,
-                              time_limit=self.m_2t7_tlm)
-        # Add Additional Threads
-        pool.start(tgt)
+        self.pool = QThreadPool.globalInstance()
 
+    def _thread_tasks_tts(self):
+        self.log.critical('TwoToSeven Thread Starting')
+        tts = TwoToSeven(orderspec=self.spec,
+                        live=self.live,
+                         morning=self.morning)
+        self.pool.start(tts)
 
-    def thread_log(self, signal: tuple):
-        msg, level = signal
-        if level.lower() == 'debug':
-            self.log.debug(msg)
-        elif level.lower() == 'critical':
-            self.log.critical(msg)
-        elif level.lower() == 'warning':
-            self.log.warning(msg)
-        elif level.lower() == 'error':
-            self.log.error(msg)
+    def _thread_tasks_cms(self):
+        self.log.critical('CMS Thread Starting')
+        cms = CMS(orderspec=self.spec,
+                  morning=self.morning)
+
+        self.pool.start(cms)
+
+    def _thread_tasks_cmsext(self):
+        self.log.critical('CMSExt Thread Starting')
+        cmsext = CMSExt(orderspec=self.spec,
+                        live=self.live,
+                        morning=self.morning)
+        self.pool.start(cmsext)
+
+    def _get_target_time(self):
+        # Get Starting Time of the PROGRAM.
+        fb = get_exception_date('1stBusinessDay')
+        sat = get_exception_date('SAT')
+
+        if self.ymd in sat:
+            target = {
+                'tts': datetime.datetime.strptime('100020', self.time_format),
+                'cms': datetime.datetime.strptime('163400', self.time_format),
+                'cmsext': datetime.datetime.strptime('094000', self.time_format)
+            }
+        elif self.ymd in fb:
+            target = {
+                'tts': datetime.datetime.strptime('100020', self.time_format),
+                'cms': datetime.datetime.strptime('153400', self.time_format),
+                'cmsext': datetime.datetime.strptime('094000', self.time_format)
+            }
+        else:
+            target = {
+                'tts': datetime.datetime.strptime('090020', self.time_format),
+                'cms': datetime.datetime.strptime('153400', self.time_format),
+                'cmsext': datetime.datetime.strptime('084000', self.time_format)
+            }
+        return target
+
+    def timer_start_thread(self):
+        tgt_time = self._get_target_time()
+
+        QTimer.singleShot(
+            self._time_until(tgt_time['tts']),  # Change here to test
+            self._thread_tasks_tts
+        )
+        QTimer.singleShot(
+            self._time_until(tgt_time['cms']),
+            self._thread_tasks_cms
+        )
+        QTimer.singleShot(
+            self._time_until(tgt_time['cmsext']),
+            self._thread_tasks_cmsext
+        )
 
 
 if __name__ == '__main__':
@@ -141,5 +147,5 @@ if __name__ == '__main__':
             time.sleep(10)
         else:
             break
-    trd = TradeBot(k, FTTwoSeven())
+    trd = TradeBot(k)
     app.exec()

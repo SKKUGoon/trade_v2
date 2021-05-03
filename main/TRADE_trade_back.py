@@ -5,7 +5,11 @@ import time
 
 class TradeBotUtil:
     new_start = True
-    ymd = datetime.datetime.now().strftime('%Y%m%d')
+    date_format = '%Y%m%d'
+    time_format = '%H%M%S'
+    ymd = datetime.datetime.now().strftime(date_format)
+    hms = datetime.datetime.now().strftime(time_format)
+
 
     def __init__(self):
         """
