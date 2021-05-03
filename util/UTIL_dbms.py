@@ -510,8 +510,8 @@ class MySQLDBMethod:
         # Execute
         self._execute(qry, False, set_val)
 
-    @u_accepts({'target_column': Iterable, 'target_table': str, 'condition': str})
-    def select_db(self, target_column: Iterable[str], target_table: str, condition: str = None):
+    def select_db(self, target_column:Iterable[str], target_table:str, condition:str=None,
+                  order_by=None, limit=None):
         """
         Use select method of sql and import database into python environment
         :condition: should be written in sql format.
@@ -525,6 +525,12 @@ class MySQLDBMethod:
             qry = qry + f' where {condition}'
         else:
             pass
+
+        if order_by is not None:
+            qry = qry + f' order by {order_by}'
+
+        if limit is not None:
+            qry = qry + f' limit {limit}'
 
         # Execute query
         c = self.conn.cursor()
