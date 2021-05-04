@@ -18,7 +18,7 @@ class Logger:
             self.qu = Queue()
         else:
             self.qu = queue
-
+        self.messenger = LineNotifier()
         now = datetime.datetime.now().strftime("%Y%m%d")
         file_path = f"{path}/{now}.txt"
 
@@ -61,12 +61,14 @@ class Logger:
         if pretty:
             msg = self.make_pretty(msg)
         self.qu.put(msg)
+        self.messenger.post_message(msg)
         self.__logger.error(msg)
 
     def critical(self, msg, pretty=True):
         if pretty:
             msg = self.make_pretty(msg)
         self.qu.put(msg)
+        self.messenger.post_message(msg)
         self.__logger.critical(msg)
 
     def make_pretty(self, msg):
