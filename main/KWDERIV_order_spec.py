@@ -63,6 +63,7 @@ class OrderSpec(QMainWindow):
         return int(res['주문가능현금'])
 
     def get_fo_deposit_info(self, account):
+        print('point1')
         col = {
             '계좌번호': 'account_num',
             '종목코드': 'asset_code',
@@ -75,7 +76,7 @@ class OrderSpec(QMainWindow):
         for asset_info in res:
             for k, v in asset_info.items():
                 asset_info[k] = self.make_pretty(v)
-
+        print('point2')
         have = list()  # Asset have
         had = list()  # Asset had
         for asset in res:
@@ -87,6 +88,7 @@ class OrderSpec(QMainWindow):
                 had.append(
                     dict((col[key], value) for (key, value) in asset.items())
                 )
+        print('point3')
         return have, had
 
     def _exception_date(self, type_: str, table='ftsdc') -> set:
