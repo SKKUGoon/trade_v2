@@ -1,121 +1,86 @@
-from main.KWDERIV_order_spec import *
-from code_.trade_state import individual as individual_trade
-from util.UTIL_log import *
-from util.set_order import OrderSheet
-from PyQt5.QtCore import *
+from PyQt5.QtCore import QRunnable, Qt, QThreadPool, pyqtSignal, QObject, QTimer
 
-import copy
+from main.KWDERIV_live_db_conn import LiveDBCon
+from main.KWDERIV_order_spec import OrderSpec
+
+from data.DATA_2to7_update import *
+
+from util.UTIL_data_convert import *
+from util.UTIL_log import Logger
+from util.UTIL_notifier import *
+from util.UTIL_dbms import *
+from util.UTIL_asset_code import *
+from util.set_order import *
+
+from models.MODEL_2to7 import VanillaTradeSVM
+
+from strategy.STRAT_two_to_seven import FTTwoSeven
+from strategy.FACTORY_fixed_time import FTFactory
+
+from typing import List
+import datetime
 import threading
 import pickle
-from os import path
+import time
 
+class TwoToSeven(QRunnable):
+    ymd = datetime.datetime.now().strftime('%Y%m%d')
 
-class Trader(QThread):
-    state = individual_trade
-    singleshot = [False] * len(state)
-
-    get_asset = pyqtSignal(tuple)
-    get_price = pyqtSignal(tuple)
-    req_compare = pyqtSignal(tuple)
-    log = pyqtSignal(tuple)
-
-    def __init__(self, model, time_dict:Dict, trade_value, screen_num, order_spec:OrderSpec,
-                 target_value=None, loss_cut=None, co_pair=False, timeout=None):
+    def __init__(self):
         super().__init__()
 
-        # Compare related Thread parameters
-        self.compare = co_pair
-        self.token_num = self.model.token['token_number']
+    def re_trade(self, screen_num, sellbuy, asset):
+        try:
+            col = ['TICKER', 'ORDER_QTY', 'ORDER_PRICE', 'UNEX_QTY', 'ORDER_NO', 'TRAN_QTY']
+            cond = f"SCREEN_NUM = '{screen_num}'"
 
-        # Status
-        self.loc = f'./_pickles3/token{self.token_num}/'
-        if not path.exists(self.loc):
-            os.mkdir(self.loc)
+            res = self.local.select_db(
+                target_column=col, target_table='RT_TR_E', condition1=cond
+            )[0]
 
-    @staticmethod
-    def set_time_format(original, to_format='%H%M%S'):
-        res = {k: v.strftime(to_format) for k, v in original.items()}
-        return res
+            tran_qty = res[col.index('TRAN_QTY')]
+            if tran_qty == '':
+                raise Exception
 
-    @staticmethod
-    def save_pickle_data(data, filename: str):
-        with open(filename, 'wb') as file:
-            pickle.dump(data, file)
+        except Exception as e:
+            col = ['TICKER', 'ORDER_QTY', 'ORDER_PRICE', 'UNEX_QTY', 'ORDER_NO']
+            cond = f"SCREEN_NUM = '{screen_num}'"
+            res = self.local.select_db(
+                target_column=col, target_table='RT_TR_E', condition1=cond
+            )
+            tran_qty = ''
 
-    @staticmethod
-    def get_pickle_data(filename: str):
-        with open(filename, 'rb') as file:
-            return pickle.load(file)
+        unexec = int(res[col.index('UNEX_QTY')])
+        orginal = res[col.index('ORDER_NO')]
 
-    @staticmethod
-    def chk_condition(status, target_state, status_dict,
-                      time=None, time_status=None, time_table=None, ):
-        if time is not None:
-            if ((status == status_dict[target_state]) and
-                    (time >= time_table[time_status])):
-                return True
-            else:
-                return False
-        if time is None:
-            if status == status_dict[target_state]:
-                return True
-            else:
-                return False
+        if unexec == 0 and tran_qty != '':
+            return
 
-    @staticmethod
-    def __get_rt_price(asset, buysell, localdb:LocalDBMethods2, spec:OrderSpec,
-                       from_table='RT_Option', timeout=30):
-        col = localdb.get_column_list(from_table)
-        time_start = time.time()
-        while time.time() - time_start <= timeout:
-            try:
-                val = localdb.select_db(
-                    target_column=col,
-                    target_table=from_table,
-                    condition1=f"code = '{asset}'"
-                )
-                price = float(val[0][col.index(buysell)])
-                return price
-            except Exception:
-                continue
-            else:
-                break
-        price = spec.tick_price_fo(asset)
-        return price
+        else:
+            cancel = order_base(name='tts', scr_num=screen_num, account=self.order.k.account_num[0],
+                                asset=asset, buy_sell=2, trade_type=3, quantity=int(unexec),
+                                order_type=3, price=0)
+            self.order.send_order_fo(**cancel)
+            new_quantity = ...
+            cancel = order_base(name='tts', scr_num=screen_num, account=self.order.k.account_num[0],
+                                asset=asset, buy_sell=2, trade_type=3, quantity=new_quantity,
+                                order_type=1, price=0)
 
-    def create_model_status(self, localdb:LocalDBMethods2, model_name, table_name='trade_state'):
-        param = {'model_name': 'Varchar(20)', 'trade_status': 'int'}
-        localdb.create_table(
-            table_name=table_name, variables=param
-        )
-        count = localdb.count_rows(table_name, condition=f"model_name='{model_name}'")
-        if count == 0:
-            localdb.insert_rows(
-                table_name,
-                col_=list(param.keys()),
-                rows_=[[model_name, self.state['get_asset_buy']]])
 
-    def set_state(self, localdb, state, model_name):
-        localdb.update_rows(
-            table_name='trade_state',
-            set_ls=['trade_status'],
-            set_val=[[state]],
-            condition=f"model_name='{model_name}'"
-        )
-
-    def retransact(self, sell_buy:str):
-        assert sell_buy in {'sell', 'buy'}
+    def run(self):
+        loc = r'D:\trade_db\local_trade._db'
+        self.local = LocalDBMethods2(loc)
+        self.local.conn.execute("PRAGMA journal_mode=WAL")
 
         while True:
-
-            ...
-
-    @pyqtSlot()
-    def run(self):
-        loc = r'C:\Data\local_trade._db'
-        self.local = LocalDBMethods2(loc)
-        self.local.conn.execute('PRAGMA journal_mode=WAL')
-        self.create_model_status(self.local, self.name)
-
-        while self.isRunning():
-            ...
+            try:
+                submitted = self.local.select_db(
+                    target_table='RT_TR_S', target_column=['ORDER_STATUS']
+                )[0][0]
+            except Exception as e:
+                submitted = None
+            if submitted == '접수':
+                self.re_trade()
+                ...
+            else:
+                ...
