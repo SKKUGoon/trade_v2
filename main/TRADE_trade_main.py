@@ -1,4 +1,5 @@
 from PyQt5.QtCore import QTimer
+from PyQt5.QtWidgets import QApplication
 
 from workers.THREAD_trader import *
 
@@ -8,6 +9,7 @@ from util.UTIL_asset_code import *
 from main.TRADE_trade_back import TradeBotUtil
 from main.KWDERIV_order_spec import OrderSpec
 from main.KWDERIV_live_db_conn import LiveDBCon
+from main.KW_kiwoom_main import Kiwoom
 
 from workers.THREAD_event_work import TwoToSeven
 from workers.THREAD_cms_ import CMS, CMSExt
@@ -76,7 +78,7 @@ class TradeBot(TradeBotUtil):
     def _thread_tasks_tts(self):
         self.log.critical('TwoToSeven Thread Starting')
         tts = TwoToSeven(orderspec=self.spec,
-                        live=self.live,
+                         live=self.live,
                          morning=self.morning)
         self.pool.start(tts)
 

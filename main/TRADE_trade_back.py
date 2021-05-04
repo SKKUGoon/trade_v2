@@ -1,5 +1,5 @@
 from workers.THREAD_trader import *
-
+from queue import Queue
 import time
 
 
