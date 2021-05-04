@@ -6,6 +6,8 @@ from util.UTIL_notifier import *
 from util.set_order import *
 from util.UTIL_data_convert import *
 
+from strategy.FACTORY_fixed_time import FTFactory
+
 from typing import List
 import datetime
 import threading
@@ -27,6 +29,7 @@ class CMS(QRunnable):
                 f'[THREAD STATUS] >>> CMS breaking on {threading.current_thread().getName()}'
             )
             return
+        return
         # Connection to Local Database
         loc = r'D:\trade_db\local_trade._db'
         self.local = LocalDBMethods2(loc)
@@ -58,7 +61,7 @@ class CMSExt(QRunnable):
                 f'[THREAD STATUS] >>> CMSExt breaking on {threading.current_thread().getName()}'
             )
             return
-
+        return
         # Connection to Local Database
         loc = r'D:\trade_db\local_trade._db'
         self.local = LocalDBMethods2(loc)
