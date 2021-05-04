@@ -24,6 +24,7 @@ class Kiwoom(QAxWidget):
     order_submit = dict()
     order_cancel = dict()
     order_execute = dict()
+    account_real = dict()
 
 
     @classmethod
@@ -60,7 +61,6 @@ class Kiwoom(QAxWidget):
         self.log = Logger(path=loc, name='TR_log')
 
         # API Queue limitation
-        self.request_chk = RequestCheck(logging=self.log)
         self.order_chk = RequestCheck(logging=self.log)
 
         # After-event process: function connection
@@ -192,7 +192,7 @@ class Kiwoom(QAxWidget):
         :return:
         """
         if real_type not in {'업종지수', '잔고', '주식체결', '주식시세',
-                             '옵션시세', '옵션호가잔량', '장시작시간'}:
+                             '옵션시세', '옵션호가잔량', '장시작시간', '파생잔고'}:
             return
         start = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
         data = [code, start]
@@ -256,6 +256,9 @@ class Kiwoom(QAxWidget):
             self.order_execute = res
         elif table == 'orders_cancelled':
             self.order_cancel = res
+        elif table == 'account_real_time':
+            self.account_real = res
+            print('realtime', self.account_real)
 
     # Transaction receive method #
     @u_accepts({'id': str})
@@ -271,9 +274,6 @@ class Kiwoom(QAxWidget):
         """
         if not self.connect_status:
             raise KiwoomConnectionError("Kiwoom server not connected")
-
-        # API Queue limitation
-        self.request_chk.req_check()
 
         res = self.dynamicCall(*comm_rq_data(rq_name, tr_code, prev_next, screen_num))
 
@@ -320,9 +320,6 @@ class Kiwoom(QAxWidget):
         if not self.connect_status:
             raise KiwoomConnectionError("Kiwoom server not connected")
 
-        # API Queue limitation
-        self.request_chk.req_check()
-
         res = self.dynamicCall(
             *comm_kw_rq_data(arr_code, cont, code_count, flag, rq_name, scr_num)
         )
@@ -355,14 +352,6 @@ class Kiwoom(QAxWidget):
             "originorderno": original_order_num,
         }
 
-        # order response data
-        # self.order_response = {
-        #     "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
-        #     "orderNo": "",
-        # }
-        # self.order_response.update(order_params)
-
-        # sendout order
         try:
             self.order_chk.req_check()
             res = self.dynamicCall(
@@ -402,12 +391,6 @@ class Kiwoom(QAxWidget):
             'price': price,
             'orgordno': order_num
         }
-
-        # self.order_response = {
-        #     "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
-        #     "orderNo": "",
-        # }
-        # self.order_response.update(order_param)
 
         try:
             self.order_chk.req_check()
