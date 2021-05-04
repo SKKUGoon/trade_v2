@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QRunnable, Qt, QThreadPool, pyqtSignal, QObject
+from PyQt5.QtCore import QRunnable, Qt, QThreadPool, pyqtSignal, QObject, QTimer, QThread
 
 from main.KWDERIV_live_db_conn import LiveDBCon
 from main.KWDERIV_order_spec import OrderSpec
@@ -6,6 +6,7 @@ from main.KWDERIV_order_spec import OrderSpec
 from data.DATA_2to7_update import *
 
 from util.UTIL_data_convert import *
+from util.UTIL_log import Logger
 from util.UTIL_notifier import *
 from util.UTIL_dbms import *
 from util.UTIL_asset_code import *
@@ -17,22 +18,24 @@ from strategy.STRAT_two_to_seven import FTTwoSeven
 from strategy.FACTORY_fixed_time import FTFactory
 
 from typing import List
+import functools
 import datetime
+import time
 import threading
 import pickle
-import time
+
 
 class TwoToSeven(QRunnable):
     ymd = datetime.datetime.now().strftime('%Y%m%d')
 
-    def __init__(self, orderspec:OrderSpec, live:LiveDBCon, morning:bool, leverage=0.1):
+    def __init__(self, orderspec:OrderSpec, live:LiveDBCon, morning:bool, leverage=0.01):
         super().__init__()
         self.morning = morning
         self.order = orderspec
         self.live = live
+        self.log = Logger(r'D:\trade_db\log')
         parm = FTFactory()
-        self.timeline, self.timelimit = parm.timing(FTTwoSeven())
-
+        self.timeline, self.timelimit, self.end = parm.timing(FTTwoSeven())
         self.train_models()
         self.get_trade_parmas(leverage)
 
@@ -71,11 +74,11 @@ class TwoToSeven(QRunnable):
         self.model1_feat = idx_features.loc[int(self.ymd):].to_numpy().tolist()
 
         # Real Time Price Information
-        atm = self._create_atm(self.open)
-        self.live.req_opt_price(atm)
+        self.atm = self._create_atm(self.open)
+        self.live.req_opt_price(self.atm)
 
         # Model 2 Data
-        self.model2_feat = [float(self._get_opening_opt(atm))]
+        self.model2_feat = [float(self._get_opening_opt(self.atm))]
 
     def _get_opening_index(self) -> str:
         """
@@ -105,12 +108,96 @@ class TwoToSeven(QRunnable):
         start = self.order.make_pretty(res[-1]['시가'])
         return start
 
+    def chk_cancel(self, screen_num, sellbuy, asset, original):
+        self.log.critical("Checking Cancellation")
+        while True:
+            QThread.sleep(1)
+            try:
+                cond = f"SCREEN_NUM = '{screen_num}' and SELL_BUY_GUBUN = '{sellbuy}'"
+                res = self.local.select_db(
+                    target_column=['ORDER_STATUS'],
+                    target_table='RT_TR_C',
+                    condition1=cond
+                )
+                if res[0][0] != '확인':
+                    raise Exception
+
+            except Exception as e:
+                print(e)
+                have, _ = self.order.get_fo_deposit_info(self.order.k.account_num[0])
+                print('get fo deposit info', have, _)
+                have_quantity = None
+                for h in have:
+                    if h['종목코드'] == asset:
+                        have_quantity = h['보유수량']
+                if have_quantity is None:
+                    have_quantity = 0
+                cancel = order_base(name='tts', scr_num=screen_num, account=self.order.k.account_num[0],
+                                    asset=asset, buy_sell=sellbuy, trade_type=3, quantity=int(have_quantity),
+                                    order_type=3, price=0, order_num=original)
+                self.order.send_order_fo(**cancel)
+                continue
+            else:
+                break
+
+    def chk_order(self, screen_num, sellbuy, asset, original_q):
+        self.log.critical("Checking Not-executed Orders.")
+
+        while True:
+            QThread.sleep(3)
+            try:
+                col = ['TICKER', 'ORDER_QTY', 'ORDER_PRICE', 'UNEX_QTY', 'ORDER_NO', 'TRAN_QTY']
+                cond = f"SCREEN_NUM = '{screen_num}' and SELL_BUY_GUBUN = '{sellbuy}'"
+
+                res = self.local.select_db(
+                    target_column=col, target_table='RT_TR_E', condition1=cond
+                )[0]
+
+                tran_qty = res[col.index('TRAN_QTY')]
+                if tran_qty == '':
+                    raise Exception
+
+            except Exception as e:  # Couldn't execute single order
+                col = ['TICKER', 'ORDER_QTY', 'ORDER_PRICE', 'UNEX_QTY', 'ORDER_NO']
+                cond = f"SCREEN_NUM = '{screen_num}' and SELL_BUY_GUBUN = '{sellbuy}'"
+                res = self.local.select_db(
+                    target_column=col, target_table='RT_TR_S', condition1=cond
+                )[0]
+                tran_qty = ''
+
+            unexec, original, order_price = (
+                int(res[col.index('UNEX_QTY')]),
+                res[col.index('ORDER_NO')],
+                float(res[col.index('ORDER_PRICE')])
+            )
+            if unexec == 0 and tran_qty != '':
+                return
+
+            else:
+                cancel = order_base(name='tts', scr_num=screen_num, account=self.order.k.account_num[0],
+                                    asset=asset, buy_sell=sellbuy, trade_type=3, quantity=int(unexec),
+                                    order_type=3, price=0, order_num=original)
+                self.order.send_order_fo(**cancel)
+                self.chk_cancel(screen_num, sellbuy, asset, original)
+                time = self.local.select_db(target_table='RT_Option',
+                                            target_column=['server_time', 'p_current'])[0]
+
+                # New Money and Quantity after an iteration.
+                self.money = (self.money - ((original_q - unexec) * 250000) * order_price)
+                new_quantity = self.money // (float(time[1]) * 250000)  # spent
+                original_q = new_quantity
+
+                new_order = order_base(name='tts', scr_num=screen_num, account=self.order.k.account_num[0],
+                                       asset=asset, buy_sell=sellbuy, trade_type=1, quantity=new_quantity,
+                                       order_type=1, price=float(time[1]))
+                self.order.send_order_fo(**new_order)
+
     def run(self):
-        print(
+        self.log.debug(
             f'[THREAD STATUS] >>> TTS Running on {threading.current_thread().getName()}'
         )
         # if self.morning is False:
-        #     print(
+        #     self.log.debug(
         #     f'[THREAD STATUS] >>> TTS breaking on {threading.current_thread().getName()}'
         #     )
         #     return
@@ -120,40 +207,103 @@ class TwoToSeven(QRunnable):
         self.local = LocalDBMethods2(loc)
         self.local.conn.execute("PRAGMA journal_mode=WAL")
 
+        # Gather Data
         target = 0
+        while True:
+            try:
+                time = self.local.select_db(target_table='RT_Option',
+                                            target_column=['server_time', 'p_current'])[0]
+                real_time = self.local.select_db(target_table='RT',
+                                                 target_column=['time'])[0]
+            except Exception as e:
+                self.log.error(e)
+                continue
+
+            if time[0] == '0' or real_time == []:
+                continue  # Kiwoom has yet to send us time.
+
+            if (time[0] >= self.timeline[target]) or (real_time[0] >= self.timelimit[target]):
+                self.model2_feat.append(float(time[1]))
+                self.log.debug(f'{target + 1}min opening is in >>> {time}')
+                target += 1
+
+            if target == (len(self.timeline)):  # 0 ~ 2 data collected. Exit Loop
+                self.log.critical(
+                    f"[{threading.current_thread().getName()}Thread] >>> Model2 feature collected"
+                )
+                break
+        self.model2_feat = get_cumul_return(self.model2_feat)[1:]
+        cscr_pred = [self.models[0].decision_function(self.model1_feat)[0],
+                     self.models[1].decision_function([self.model2_feat])[0]]
+
+        # Bid
+        if self.models[2].predict([cscr_pred])[0] is True:  # If True, enter market
+            self.log.critical('[THREAD STATUS] >>> TTS Signal On')
+            q = self.money // (float(time[1]) * 250000)
+            sheet = order_base(name='tts', scr_num='1000', account=self.order.k.account_num[0],
+                               asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=float(time[1]))
+            self.log.critical(f'[THREAD STATUS] >>> (BID) Sending Order {sheet}')
+            self.order.send_order_fo(**sheet)
+        else:
+            self.log.critical('[THREAD STATUS] >>> TTS Signal Off. Terminating')
+            return
+
+        # Check Order
+        while True:
+            try:
+                cond = f"SCREEN_NUM='1000'"
+                submitted = self.local.select_db(
+                    target_table='RT_TR_S', target_column=['ORDER_STATUS'], condition1=cond
+                )[0][0]
+            except Exception as e:
+                continue
+
+            if submitted == '접수':
+                self.log.critical('[THREAD STATUS] >>> (BID) TTS Order is in')
+                self.chk_order('1000', 2, self.atm, q)
+                break
+            else:
+                self.log.error('[THREAD STATUS] >>> TTS Order is not in')
+                return
+
+        # Ask
         while True:
             time = self.local.select_db(target_table='RT_Option',
                                         target_column=['server_time', 'p_current'])[0]
             real_time = self.local.select_db(target_table='RT',
                                              target_column=['time'])[0][0]
+            print('timetime', time, real_time)
 
-            if time[0] == '0':
-                continue  # Kiwoom has yet to send us time.
-
-            if (time[0] >= self.timeline[target]) or (real_time >= self.timelimit[target]):
-                self.model2_feat.append(float(time[1]))
-                print(time)
-                target += 1
-            #
-            if target == (len(self.timeline)):  # 0 ~ 2 data collected. Exit Loop
-                print(
-                    f"[{threading.current_thread().getName()}Thread] >>> Model2 feature collected")
+            if real_time >= self.end[0]:  # at 7min
+                have, _ = self.order.get_fo_deposit_info(self.order.k.account_num[0])
+                have_quantity = None
+                for h in have:
+                    if h['asset_code'] == self.atm:
+                        have_quantity = h['quantity']
+                if have_quantity is None:
+                    self.log.error('[THREAD STATUS] >>> Please Sell Asset Manually')
+                    return
+                sheet = order_base(
+                    name='tts', scr_num='1100', account=self.order.k.account_num[0],
+                    asset=self.atm, buy_sell=1, trade_type=1, quantity=have_quantity, price=float(time[1])
+                )
+                self.log.critical(f'[THREAD STATUS] >>> (ASK) Sending Order {sheet}')
+                self.order.send_order_fo(**sheet)
                 break
 
-        self.model2_feat = get_cumul_return(self.model2_feat)[1:]
-        print(self.model2_feat)
-
-        # Gather Data
-        cscr_pred = [self.models[0].decision_function(self.model1_feat)[0],
-                     self.models[1].decision_function([self.model2_feat])[0]]
-        print('model3', cscr_pred)
-        if self.models[2].predict([cscr_pred])[0] is True:  # If True, enter market
-            print('[THREAD STATUS] >>> TTS Signal On')
-            q = self.money // (float(time[1]) * 250000)
-            print(q)
-            sheet = order_base(name='tts', scr_num='1000', account=self.order.k.account_num[0],
-                               asset=self.asset, buy_sell=2, trade_type=3, quantity=q, price=0)
-            self.order.send_order_fo(**sheet)
-        else:
-            print('[THREAD STATUS] >>> TTS Signal Off. Terminating')
-            return
+        # # Check Order
+        # while True:
+        #     try:
+        #         cond = f"SCREEN_NUM='1100'"
+        #         submitted = self.local.select_db(
+        #             target_table='RT_TR_S', target_column=['ORDER_STATUS'], condition1=cond
+        #         )[0][0]
+        #     except Exception as e:
+        #         continue
+        #
+        #     if submitted == '접수':
+        #         self.log.critical('[THREAD STATUS] >>> (ASK) TTS Order is in')
+        #         self.chk_order('1100', 1, self.atm, have_quantity)
+        #     else:
+        #         self.log.error('[THREAD STATUA] >>> TTS Order is not in')
+        #         return
