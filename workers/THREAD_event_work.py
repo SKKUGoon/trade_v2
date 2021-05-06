@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QRunnable, Qt, QThreadPool, pyqtSignal, QObject, QTimer, QThread
+from PyQt5.QtCore import QRunnable, QThread
 
 from main.KWDERIV_live_db_conn import LiveDBCon
 from main.KWDERIV_order_spec import OrderSpec
@@ -16,10 +16,7 @@ from models.MODEL_2to7 import VanillaTradeSVM
 from strategy.STRAT_two_to_seven import FTTwoSeven
 from strategy.FACTORY_fixed_time import FTFactory
 
-from typing import List
-import functools
 import datetime
-import time
 import threading
 import pickle
 
@@ -27,7 +24,7 @@ import pickle
 class TwoToSeven(QRunnable):
     ymd = datetime.datetime.now().strftime('%Y%m%d')
 
-    def __init__(self, orderspec:OrderSpec, live:LiveDBCon, morning:bool, leverage=0.02):
+    def __init__(self, orderspec:OrderSpec, live:LiveDBCon, morning:bool, leverage=0.5):
         super().__init__()
         self.morning = morning
         self.order = orderspec
@@ -284,7 +281,7 @@ class TwoToSeven(QRunnable):
                 self.log.error('[THREAD STATUS] >>> TTS Order is not in')
                 return
         self.log.critical(
-            f'[THREAD STATUA] >>> TTS Strat Resulting Quantity {self.true_quant}'
+            f'[THREAD STATUS] >>> TTS Strat Resulting Quantity {self.true_quant}'
         )
 
         # Ask
