@@ -274,15 +274,12 @@ class Kiwoom(QAxWidget):
         """
         if not self.connect_status:
             raise KiwoomConnectionError("Kiwoom server not connected")
-
         res = self.dynamicCall(*comm_rq_data(rq_name, tr_code, prev_next, screen_num))
-
         if res != 0:  # Successful only if 0
             t = datetime.datetime.now()
             err = getattr(ReturnCode, "CAUSE").get(res)
             self.log.error(f"{t} Comm Req Data {rq_name} Fail. CAUSE {err}")
             raise KiwoomRequestFailError(f"Returned {res} due to {err}")
-
         self.log.debug(f'{datetime.datetime.now()} Comm Req Data {rq_name}')
         self.request_loop = QEventLoop()
         self.request_loop.exec_()

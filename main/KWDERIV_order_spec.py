@@ -41,7 +41,6 @@ class OrderSpec(QMainWindow):
 
         for k, v in kwargs.items():
             self.k.set_input_value(k, v)
-
         tr_name = getattr(TRName, tr_code)
         self.k._comm_rq_data(tr_name, tr_code, 0, "0101")
         return getattr(self.k, tr_code)
