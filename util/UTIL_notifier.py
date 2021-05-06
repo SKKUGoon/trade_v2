@@ -2,10 +2,10 @@ import requests
 
 class LineNotifier:
     TARGET_URL = 'https://notify-api.line.me/api/notify'
-    TOKEN = 'XWU0ewiUw2QxVAcF7ViCqR4QKdz5YjIbZiUb5fAC9Z0'  # Your Token Here
-
-    def __init__(self):
-        ...
+    # TOKEN = 'uSOq9RQUp10fzq3kmli56waLpuqKvWUV41SR65vbQyL'  <- Y's token key
+    def __init__(self, token='XWU0ewiUw2QxVAcF7ViCqR4QKdz5YjIbZiUb5fAC9Z0'):
+        self.TOKEN = token
+        pass
 
     def post_message(self, msg):
         response = requests.post(
