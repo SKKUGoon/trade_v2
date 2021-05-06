@@ -93,7 +93,7 @@ class Kiwoom(QAxWidget):
     @property
     def account_num(self):
         acc = self._get_login_info('ACCNO').rstrip(";")
-        return acc.split(";")
+        return [_ for _ in acc.split(';') if _[-2:] == '31']  # FO account ends with '31'
 
     def _get_login_info(self, value):
         if not self.connect_status:

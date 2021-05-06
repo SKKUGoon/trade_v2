@@ -28,7 +28,7 @@ import pickle
 class TwoToSeven(QRunnable):
     ymd = datetime.datetime.now().strftime('%Y%m%d')
 
-    def __init__(self, orderspec:OrderSpec, live:LiveDBCon, morning:bool, leverage=0.01):
+    def __init__(self, orderspec:OrderSpec, live:LiveDBCon, morning:bool, leverage=0.5):
         super().__init__()
         self.morning = morning
         self.order = orderspec
@@ -66,6 +66,7 @@ class TwoToSeven(QRunnable):
     def get_trade_parmas(self, leverage):
         self.money = self.order.get_fo_margin_info(self.order.k.account_num[0])
         self.money = self.money * leverage
+        self.log.critical(f'[THREAD STATUS] >>> Account Money at {self.money}')
 
         # Model 1 Data
         self.open, self.close = self._get_opening_index()  # CO Return
@@ -237,13 +238,14 @@ class TwoToSeven(QRunnable):
                      self.models[1].decision_function([self.model2_feat])[0]]
 
         # Bid
-        if self.models[2].predict([cscr_pred])[0] is True:  # If True, enter market
-            self.log.critical('[THREAD STATUS] >>> TTS Signal On')
+        if self.models[2].predict([cscr_pred])[0] is True or self.models[2].predict([cscr_pred])[0] == 1:
+            print(self.models[2].predict([cscr_pred])[0])  # If True, enter market
+            self.log.critical(f'[THREAD STATUS] >>> TTS Signal On.')
             q = self.money // (float(time[1]) * 250000)
             sheet = order_base(name='tts', scr_num='1000', account=self.order.k.account_num[0],
                                asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=float(time[1]))
             self.log.critical(f'[THREAD STATUS] >>> (BID) Sending Order {sheet}')
-            self.order.send_order_fo(**sheet)
+            # self.order.send_order_fo(**sheet)
         else:
             self.log.critical('[THREAD STATUS] >>> TTS Signal Off. Terminating')
             return
@@ -260,7 +262,7 @@ class TwoToSeven(QRunnable):
 
             if submitted == '접수':
                 self.log.critical('[THREAD STATUS] >>> (BID) TTS Order is in')
-                self.chk_order('1000', 2, self.atm, q)
+                # self.chk_order('1000', 2, self.atm, q)
                 break
             else:
                 self.log.error('[THREAD STATUS] >>> TTS Order is not in')

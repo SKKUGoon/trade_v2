@@ -125,7 +125,7 @@ class TradeBot(TradeBotUtil):
         tgt_time = self._get_target_time()
 
         QTimer.singleShot(
-            0, #self._time_until(tgt_time['tts']),  # Change here to test
+            self._time_until(tgt_time['tts']),  # Change here to test
             self._thread_tasks_tts
         )
         QTimer.singleShot(
