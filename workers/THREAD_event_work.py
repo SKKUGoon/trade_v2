@@ -7,10 +7,9 @@ from data.DATA_2to7_update import *
 
 from util.UTIL_data_convert import *
 from util.UTIL_log import Logger
-from util.UTIL_notifier import *
 from util.UTIL_dbms import *
 from util.UTIL_asset_code import *
-from util.set_order import *
+from util.UTIL_set_order import *
 
 from models.MODEL_2to7 import VanillaTradeSVM
 
@@ -109,7 +108,7 @@ class TwoToSeven(QRunnable):
         start = self.order.make_pretty(res[-1]['시가'])
         return start
 
-    def chk_cancel(self, screen_num, sellbuy, asset, original, original_unexec):
+    def chk_cancel(self, screen_num, sellbuy, asset, original, original_unexec) -> any:
         self.log.critical("Checking Cancellation")
         while True:
             QThread.sleep(1)
@@ -211,11 +210,11 @@ class TwoToSeven(QRunnable):
         self.log.debug(
             f'[THREAD STATUS] >>> TTS Running on {threading.current_thread().getName()}'
         )
-        # if self.morning is False:
-        #     self.log.debug(
-        #     f'[THREAD STATUS] >>> TTS breaking on {threading.current_thread().getName()}'
-        #     )
-        #     return
+        if self.morning is False:
+            self.log.debug(
+            f'[THREAD STATUS] >>> TTS breaking on {threading.current_thread().getName()}'
+            )
+            return
 
         # Connection to Local Database
         loc = r'D:\trade_db\local_trade._db'
@@ -284,7 +283,10 @@ class TwoToSeven(QRunnable):
             else:
                 self.log.error('[THREAD STATUS] >>> TTS Order is not in')
                 return
-        print(f'Resulting Quantity {self.true_quant}')
+        self.log.critical(
+            f'[THREAD STATUA] >>> TTS Strat Resulting Quantity {self.true_quant}'
+        )
+
         # Ask
         while True:
             time = self.local.select_db(target_table='RT_Option',

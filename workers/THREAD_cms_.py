@@ -3,7 +3,7 @@ from PyQt5.QtCore import QRunnable, Qt, QThreadPool
 from main.KWDERIV_order_spec import OrderSpec
 from util.UTIL_dbms import *
 from util.UTIL_notifier import *
-from util.set_order import *
+from util.UTIL_set_order import *
 from util.UTIL_data_convert import *
 
 from strategy.FACTORY_fixed_time import FTFactory

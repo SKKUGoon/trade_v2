@@ -511,7 +511,7 @@ class MySQLDBMethod:
         self._execute(qry, False, set_val)
 
     def select_db(self, target_column:Iterable[str], target_table:str, condition:str=None,
-                  order_by=None, limit=None):
+                  order_by=None, limit=None, distinct=False):
         """
         Use select method of sql and import database into python environment
         :condition: should be written in sql format.
@@ -519,7 +519,10 @@ class MySQLDBMethod:
         """
         # Make str() query
         col = ', '.join(str(cols) for cols in target_column)
-        qry = f"SELECT {col} FROM {target_table}"
+        if distinct is False:
+            qry = f"SELECT {col} FROM {target_table}"
+        else:
+            qry = f"SELECT DISTINCT {col} FROM {target_table}"
 
         if condition is not None:
             qry = qry + f' where {condition}'

@@ -10,7 +10,7 @@ from util.UTIL_log import Logger
 from util.UTIL_notifier import *
 from util.UTIL_dbms import *
 from util.UTIL_asset_code import *
-from util.set_order import *
+from util.UTIL_set_order import *
 
 from models.MODEL_2to7 import VanillaTradeSVM
 

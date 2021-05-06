@@ -1,4 +1,5 @@
 from util.UTIL_dbms import *
+from util.UTIL_asset_code import get_exception_date
 
 import pandas as pd
 import numpy as np
@@ -10,6 +11,13 @@ import math
 from sklearn import svm
 
 db = MySQLDBMethod(None, 'main')
+fb = get_exception_date('1stBusinessDay')
+sat = get_exception_date('SAT')
+if datetime.datetime.now().strftime('%Y%m%d') in (fb + sat):
+    timeline = ['10:00:00', '10:31:00']
+else:
+    timeline = ['09:00:00', '09:31:00']
+
 
 def import_maturity_days(start_date:str, equal:bool) -> List:
     cols_ftsdc = db.get_column_list(table_name='ftsdc')
@@ -224,7 +232,7 @@ def update_opt_path(idx_features, loc=r'D:/trade_db/fixed_time_strategy_data/2to
     for d in update_opt:
         res = db.select_db(target_table='ftsdr',
                            target_column=['open'],
-                           condition=f'code = "201" and days = "{d}" and time = "09:00:00"')[0][0]
+                           condition=f'code = "201" and days = "{d}" and time = "{timeline[0]}"')[0][0]
         ATM_put = max([ATM for ATM in ATM_candi_list if ATM <= res])
         maturity_days = import_maturity_days(start_date=d, equal=True)
         cmon = int(maturity_days[0][4:6])
@@ -232,7 +240,7 @@ def update_opt_path(idx_features, loc=r'D:/trade_db/fixed_time_strategy_data/2to
 
         opt_prc = db.select_db(target_table='ftsdr',
                                target_column=['time', 'open'],
-                               condition=f'days="{d}" and code = "{asset}" and time >= "09:00:00" and time < "09:31:00"',
+                               condition=f'days="{d}" and code = "{asset}" and time >= "{timeline[0]}" and time < "{timeline[1]}"',
                                order_by='time desc',
                                limit=31)
         opt_prc_df_tem = pd.DataFrame(opt_prc, columns=['time', 'opt_open'])
