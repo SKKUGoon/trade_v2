@@ -1,4 +1,5 @@
 from strategy.STRAT_two_to_seven import *
+from strategy.STRAT_cms import *
 
 
 class FTFactory:
@@ -12,3 +13,4 @@ class FTFactory:
 if __name__ == '__main__':
     d = FTFactory()
     print(d.timing(FTTwoSeven()))
+    print(d.timing(FTCMS()))
