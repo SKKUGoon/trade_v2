@@ -104,19 +104,19 @@ class TradeBot(TradeBotUtil):
         if self.ymd in sat:
             target = {
                 'tts': datetime.datetime.strptime('100020', self.time_format),
-                'cms': datetime.datetime.strptime('163400', self.time_format),
+                'cms': datetime.datetime.strptime('163030', self.time_format),
                 'cmsext': datetime.datetime.strptime('094000', self.time_format)
             }
         elif self.ymd in fb:
             target = {
                 'tts': datetime.datetime.strptime('100020', self.time_format),
-                'cms': datetime.datetime.strptime('153400', self.time_format),
+                'cms': datetime.datetime.strptime('153030', self.time_format),
                 'cmsext': datetime.datetime.strptime('094000', self.time_format)
             }
         else:
             target = {
                 'tts': datetime.datetime.strptime('090020', self.time_format),
-                'cms': datetime.datetime.strptime('153400', self.time_format),
+                'cms': datetime.datetime.strptime('153030', self.time_format),
                 'cmsext': datetime.datetime.strptime('084000', self.time_format)
             }
         return target

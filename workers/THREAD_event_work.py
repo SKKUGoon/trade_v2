@@ -117,6 +117,9 @@ class TwoToSeven(QRunnable):
                     target_table='RT_TR_C',
                     condition1=cond
                 )
+                if res == []:
+                    raise Exception
+
                 if res[0][0] != '확인':
                     raise Exception
 
@@ -128,6 +131,8 @@ class TwoToSeven(QRunnable):
                     target_table='RT_TR_E',
                     condition1=cond
                 )
+                if res == []:
+                    continue
                 have_quantity = int(res[0][0])
                 if have_quantity == 0:
                     return 0
@@ -145,7 +150,7 @@ class TwoToSeven(QRunnable):
         self.log.critical("Checking Not-executed Orders.")
 
         while True:
-            QThread.sleep(1)
+            QThread.sleep(4)
             try:
                 col = ['TICKER', 'ORDER_QTY', 'ORDER_PRICE', 'UNEX_QTY', 'ORDER_NO', 'TRAN_QTY']
                 cond = f"SCREEN_NUM = '{screen_num}' and SELL_BUY_GUBUN = '{sellbuy}'"
