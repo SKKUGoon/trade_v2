@@ -1,5 +1,5 @@
-from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QTimer
 
 from workers.THREAD_trader import *
 
@@ -11,14 +11,11 @@ from main.KWDERIV_order_spec import OrderSpec
 from main.KWDERIV_live_db_conn import LiveDBCon
 from main.KW_kiwoom_main import Kiwoom
 
-from workers.THREAD_event_work import TwoToSeven
-from workers.THREAD_cms_ import CMS, CMSExt
+from workers.THREAD_tts import TwoToSeven
+from workers.THREAD_cms_ import CMS
+from workers.THREAD_cmsext import CMSExt
 
-from typing import List
-from queue import Queue
-import pickle
 import time
-import copy
 import sys
 
 assert sys.version_info >= (3, 6), f'python version should be 3.6 or higher'
@@ -55,9 +52,9 @@ class TradeBot(TradeBotUtil):
         )
 
         until = (target - called).seconds
-        print((target - called).days)
+        if (target - called).days < 0:
+            until = 0
 
-        print(until)
         if unit == 'msec':
             return until * 1000
         else:
@@ -85,7 +82,8 @@ class TradeBot(TradeBotUtil):
     def _thread_tasks_cms(self):
         self.log.critical('CMS Thread Starting')
         cms = CMS(orderspec=self.spec,
-                  morning=self.morning)
+                  morning=self.morning,
+                  live=self.live)
 
         self.pool.start(cms)
 
