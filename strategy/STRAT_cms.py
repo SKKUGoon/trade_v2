@@ -3,14 +3,14 @@ from util.UTIL_asset_code import get_exception_date
 
 import datetime
 
+
 class FTCMS(FTManager):
 
     def get_state(self):
         sat = get_exception_date('SAT')
-        fb = get_exception_date('1stBusinessDay')
 
         today = datetime.datetime.now().strftime('%Y%m%d')
-        if (today in sat) or (today in fb):
+        if today in sat:
             states = ['163100', '163200', '163300', '163400']
             limit = ['163158', '163258', '163358', '163420']
             end = ['']
@@ -23,11 +23,3 @@ class FTCMS(FTManager):
 
     def my_name(self):
         return 'FTCMS'
-
-class FTCMSExt(FTManager):
-
-    def get_state(self):
-        sat = get_exception_date('SAT')
-        fb = get_exception_date('1stBusinessDay')
-
-        today = datetime.datetime.now().strftime('%Y%m%d')
