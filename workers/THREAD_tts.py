@@ -131,7 +131,7 @@ class TwoToSeven(QRunnable):
                     target_table='RT_TR_E',
                     condition1=cond
                 )
-                if res == []:
+                if res == []:  # The Program hasn't received niether Execution nor Cancellation
                     continue
                 have_quantity = int(res[0][0])
                 if have_quantity == 0:
@@ -184,7 +184,7 @@ class TwoToSeven(QRunnable):
                                     asset=asset, buy_sell=sellbuy, trade_type=3, quantity=int(unexec),
                                     order_type=3, price=0, order_num=original)
                 self.order.send_order_fo(**cancel)
-                self.true_quant += -(unexec)
+                self.true_quant += -unexec
                 real_cancel = self.chk_cancel(
                     screen_num, sellbuy, asset, original, unexec
                 )
@@ -227,10 +227,14 @@ class TwoToSeven(QRunnable):
         target = 0
         while True:
             try:
-                time = self.local.select_db(target_table='RT_Option',
-                                            target_column=['server_time', 'p_current'])[0]
-                real_time = self.local.select_db(target_table='RT',
-                                                 target_column=['time'])[0]
+                cond = f"code = '{self.atm}'"
+                time = self.local.select_db(
+                    target_table='RT_Option',
+                    target_column=['server_time', 'p_current'],
+                    condition1=cond)[0]
+                real_time = self.local.select_db(
+                    target_table='RT',
+                    target_column=['time'])[0]
             except Exception as e:
                 self.log.error(e)
                 continue
@@ -299,7 +303,8 @@ class TwoToSeven(QRunnable):
             if real_time >= self.end[0]:  # at 7min
                 sheet = order_base(
                     name='tts', scr_num='1100', account=self.order.k.account_num[0],
-                    asset=self.atm, buy_sell=1, trade_type=1, quantity=int(self.true_quant), price=float(time[1])
+                    asset=self.atm, buy_sell=1, trade_type=1, quantity=int(self.true_quant),
+                    price=float(time[1])
                 )
                 self.log.critical(f'[THREAD STATUS] >>> (ASK) Sending Order {sheet}')
                 self.order.send_order_fo(**sheet)
