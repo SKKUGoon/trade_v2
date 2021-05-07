@@ -44,7 +44,7 @@ class VanillaTradeSVM():
         # Data update
         update_index_us()
         update_index_kor()
-        idx_features = index_features(np.nan, np.nan)
+        idx_features = index_features(0.00042617672128044044, 20210503)
         update_opt_path(idx_features)
         opt_features = option_features()
 
