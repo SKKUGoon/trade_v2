@@ -8,17 +8,15 @@ from data.DATA_cms_update import *
 from util.UTIL_dbms import *
 from util.UTIL_log import *
 from util.UTIL_set_order import *
-from util.UTIL_data_convert import *
 
 from strategy.FACTORY_fixed_time import FTFactory
-from strategy.STRAT_cms import FTCMS, FTCMSExt
-from typing import List
+from strategy.STRAT_cms import FTCMS
+
 import datetime
 import threading
-import pickle
 
 
-class CMSExt(QRunnable):
+class CMS(QRunnable):
     ymd = datetime.datetime.now().strftime('%Y%m%d')
 
     def __init__(self, orderspec:OrderSpec, live:LiveDBCon,morning:bool, leverage=0.5):
@@ -30,6 +28,7 @@ class CMSExt(QRunnable):
 
         parm = FTFactory()
         self.timeline, self.timelimit, _ = parm.timing(FTCMS())
+        self.get_trade_params(leverage)
 
     def get_trade_params(self, leverage):
         self.money = self.order.get_fo_margin_info(self.order.k.account_num[0])
@@ -40,16 +39,121 @@ class CMSExt(QRunnable):
         self.atm = get_today_asset_code()  # execute after 15:00:00
         self.live.req_opt_price(self.atm)
 
+    def chk_cancel(self, screen_num, sellbuy, asset, original, original_unexec) -> any:
+        self.log.critical("Checking Cancellation")
+        while True:
+            QThread.sleep(1)
+            try:
+                cond = f"SCREEN_NUM = '{screen_num}' and SELL_BUY_GUBUN = " \
+                       f"'{sellbuy}' and ORIGINAL_ORDER_NO = '{int(original)}'"
+                res = self.local.select_db(
+                    target_column=['ORDER_STATUS', 'ORDER_QTY'],
+                    target_table='RT_TR_C',
+                    condition1=cond
+                )
+                print('C', res)
+                if res == []:
+                    raise Exception
+
+                if res[0][0] != '확인':
+                    raise Exception
+
+            except Exception as e:
+                cond = f"SCREEN_NUM = '{screen_num}' and SELL_BUY_GUBUN = " \
+                       f"'{sellbuy}' and ORDER_NO = '{original}'"
+                res = self.local.select_db(
+                    target_column=['UNEX_QTY'],
+                    target_table='RT_TR_E',
+                    condition1=cond
+                )
+                print('E', res)
+                if res == []:  # The Program hasn't received niether Execution nor Cancellation
+                    continue
+                have_quantity = int(res[0][0])
+                if have_quantity == 0:
+                    return 0
+                self.true_quant = self.true_quant + original_unexec - have_quantity
+                cancel = order_base(name='tts', scr_num=screen_num, account=self.order.k.account_num[0],
+                                    asset=asset, buy_sell=sellbuy, trade_type=3, quantity=int(have_quantity),
+                                    order_type=3, price=0, order_num=original)
+                self.order.send_order_fo(**cancel)
+                continue
+            else:
+                return res[0][1]
+
+
+    def chk_order(self, screen_num, sellbuy, asset, original_q):
+        self.log.critical("Checking Not-executed Orders.")
+
+        while True:
+            QThread.sleep(4)
+            try:
+                col = ['TICKER', 'ORDER_QTY', 'ORDER_PRICE', 'UNEX_QTY', 'ORDER_NO', 'TRAN_QTY']
+                cond = f"SCREEN_NUM = '{screen_num}' and SELL_BUY_GUBUN = '{sellbuy}'"
+
+                res = self.local.select_db(
+                    target_column=col, target_table='RT_TR_E', condition1=cond
+                )[0]
+
+                tran_qty = res[col.index('TRAN_QTY')]
+                if tran_qty == '':
+                    raise Exception
+
+            except Exception as e:  # Couldn't execute single order
+                col = ['TICKER', 'ORDER_QTY', 'ORDER_PRICE', 'UNEX_QTY', 'ORDER_NO']
+                cond = f"SCREEN_NUM = '{screen_num}' and SELL_BUY_GUBUN = '{sellbuy}'"
+                res = self.local.select_db(
+                    target_column=col, target_table='RT_TR_S', condition1=cond
+                )[0]
+                tran_qty = ''
+
+            unexec, original, order_price = (
+                int(res[col.index('UNEX_QTY')]),
+                res[col.index('ORDER_NO')],
+                float(res[col.index('ORDER_PRICE')])
+            )
+            if unexec == 0 and tran_qty != '':
+                return
+
+            else:
+                cancel = order_base(name='tts', scr_num=screen_num, account=self.order.k.account_num[0],
+                                    asset=asset, buy_sell=sellbuy, trade_type=3, quantity=int(unexec),
+                                    order_type=3, price=0, order_num=original)
+                self.order.send_order_fo(**cancel)
+                self.true_quant += -unexec
+                real_cancel = self.chk_cancel(
+                    screen_num, sellbuy, asset, original, unexec
+                )
+                time = self.local.select_db(target_table='RT_Option',
+                                            target_column=['server_time', 'p_current'])[0]
+
+                try:
+                    assert int(real_cancel) == int(unexec)  # If chk_cancel changed the cancelled value
+                except Exception as e:
+                    print(e)
+                    unexec = int(real_cancel)
+
+                # New Money and Quantity after an iteration.
+                self.money = (self.money - ((original_q - unexec) * 250000) * order_price)
+                new_quantity = self.money // (float(time[1]) * 250000)  # spent
+                original_q = new_quantity
+
+                new_order = order_base(name='tts', scr_num=screen_num, account=self.order.k.account_num[0],
+                                       asset=asset, buy_sell=sellbuy, trade_type=1, quantity=new_quantity,
+                                       order_type=1, price=float(time[1]))
+                self.true_quant += new_quantity
+                self.order.send_order_fo(**new_order)
+
     def run(self):
-        print(
+        self.log.debug(
             f'[THREAD STATUS] >>> CMS Running on {threading.current_thread().getName()}'
         )
         if self.morning is True:
-            print(
+            self.log.debug(
                 f'[THREAD STATUS] >>> CMS Breaking on {threading.current_thread().getName()}'
             )
             return
-        return
+
         # Connection to Local Database
         loc = r'D:\trade_db\local_trade._db'
         self.local = LocalDBMethods2(loc)
@@ -60,19 +164,23 @@ class CMSExt(QRunnable):
         target = 0
         while True:
             try:
-                time = self.local.select_db(target_table='RT_Option',
-                                            target_column=['server_time', 'p_current'])[0]
-                real_time = self.local.select_db(target_table='RT',
-                                                 target_column=['time'])[0][0]
+                cond = f"code = '{self.atm}'"
+                time = self.local.select_db(
+                    target_table='RT_Option',
+                    target_column=['server_time', 'p_current'],
+                    condition1=cond)[0]
+                real_time = self.local.select_db(
+                    target_table='RT',
+                    target_column=['time'])[0][0]
 
             except Exception as e:
                 self.log.error(e)
                 continue
 
-            if time[0] == '0' or real_time == []:
+            if (time[0] == '0') or real_time == []:
                 continue
 
-            if (time[0] >= seljf.timeline[target]) or (real_time >= self.timelimit[target]):
+            if (time[0] >= self.timeline[target]) or (real_time >= self.timelimit[target]):
                 path_31_34.append(float(time[1]))
                 self.log.debug(f'{target + 31}min opening is in >>> {time}')
                 target += 1
@@ -82,7 +190,7 @@ class CMSExt(QRunnable):
                     f"[{threading.current_thread().getName()}Thread] >>> CMS Feature collected"
                 )
                 break
-
+        print('result', path_31_34)
         opt_path_call, opt_path_call_open, co_return = cms_update_data()
         today_pred = cms_prediction(opt_path_call,
                                     co_return,
@@ -102,7 +210,7 @@ class CMSExt(QRunnable):
             self.log.critical(f'[THREAD STATUS] >>> CMS Signal Off. Terminating. Signal is {action}')
             return
 
-            # Check Order
+        # Check Order
         while True:
             try:
                 cond = f"SCREEN_NUM='2000'"
@@ -114,7 +222,7 @@ class CMSExt(QRunnable):
 
             if submitted == '접수':
                 self.log.critical('[THREAD STATUS] >>> (BID) CMS Order is in')
-                # TODO: insert Check Order function
+                self.chk_order('2000', 2, self.atm, q)
                 self.log.critical('[THREAD STATUS] >>> (BID) CMS Order Check Done')
                 break
             else:
@@ -123,26 +231,4 @@ class CMSExt(QRunnable):
         self.log.critical(
             f'[THREAD STATUS] >>> CMS Strat Resulting Quantity {self.true_quant}'
         )
-
-
-class CMS(QRunnable):
-    def __init__(self, orderspec:OrderSpec, morning:bool, live):
-        super().__init__()
-        self.order = orderspec
-        self.live = live
-        self.morning = morning
-
-    def run(self):
-        print(
-            f'[THREAD STATUS] >>> CMSExt Running on {threading.current_thread().getName()}'
-        )
-        if self.morning is False:
-            print(
-                f'[THREAD STATUS] >>> CMSExt breaking on {threading.current_thread().getName()}'
-            )
-            return
         return
-        # Connection to Local Database
-        loc = r'D:\trade_db\local_trade._db'
-        self.local = LocalDBMethods2(loc)
-        self.local.conn.execute("PRAGMA journal_mode=WAL")
