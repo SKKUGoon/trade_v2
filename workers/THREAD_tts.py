@@ -24,7 +24,7 @@ import pickle
 class TwoToSeven(QRunnable):
     ymd = datetime.datetime.now().strftime('%Y%m%d')
 
-    def __init__(self, orderspec:OrderSpec, live:LiveDBCon, morning:bool, leverage=0.5):
+    def __init__(self, orderspec:OrderSpec, live:LiveDBCon, morning:bool, leverage=0.05):
         super().__init__()
         self.morning = morning
         self.order = orderspec
@@ -110,6 +110,7 @@ class TwoToSeven(QRunnable):
         while True:
             QThread.sleep(1)
             try:
+                self.log.debug("Ping RT_TR_C")
                 cond = f"SCREEN_NUM = '{screen_num}' and SELL_BUY_GUBUN = " \
                        f"'{sellbuy}' and ORIGINAL_ORDER_NO = '{int(original)}'"
                 res = self.local.select_db(
@@ -124,6 +125,7 @@ class TwoToSeven(QRunnable):
                     raise Exception
 
             except Exception as e:
+                self.log.debug("Ping RT_TR_E, instead")
                 cond = f"SCREEN_NUM = '{screen_num}' and SELL_BUY_GUBUN = " \
                        f"'{sellbuy}' and ORDER_NO = '{original}'"
                 res = self.local.select_db(
@@ -131,7 +133,7 @@ class TwoToSeven(QRunnable):
                     target_table='RT_TR_E',
                     condition1=cond
                 )
-                if res == []:  # The Program hasn't received niether Execution nor Cancellation
+                if res == []:  # The Program hasn't received neither Execution nor Cancellation
                     continue
                 have_quantity = int(res[0][0])
                 if have_quantity == 0:
@@ -263,7 +265,7 @@ class TwoToSeven(QRunnable):
             self.log.critical(f'[THREAD STATUS] >>> TTS Signal On. Signal is {final_pred}')
             q = self.money // (float(time[1]) * 250000)
             sheet = order_base(name='tts', scr_num='1000', account=self.order.k.account_num[0],
-                               asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=float(time[1]))
+                               asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=0.01)#float(time[1]))
             self.log.critical(f'[THREAD STATUS] >>> (BID) Sending Order {sheet}')
             self.order.send_order_fo(**sheet)
             self.true_quant += q
