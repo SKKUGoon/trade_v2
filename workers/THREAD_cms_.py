@@ -159,7 +159,20 @@ class CMS(QRunnable):
         self.local = LocalDBMethods2(loc)
         self.local.conn.execute("PRAGMA journal_mode=WAL")
 
-        # Get
+        # Zero to ThirtyFour Minute
+        self.zttf = False
+        'Get ATM'
+        'Get Close, Open of that ATM'
+        'Fit Model'
+        zttf_action = ...
+        if zttf_action == 1:
+            self.zttf = True
+            self.zttf_quant = 0
+            self.log.critical(f'[THREAD STATUS] >>> ZTTF Signal On. Signal is {zttf_action}')
+
+
+
+        # Get CMS Data
         path_31_34 = list()
         target = 0
         while True:
@@ -195,11 +208,11 @@ class CMS(QRunnable):
         today_pred = cms_prediction(opt_path_call,
                                     co_return,
                                     p31_34=path_31_34)  # New Realtime data
-        action = today_pred.to_numpy().tolist()[-1]
+        cms_action = today_pred.to_numpy().tolist()[-1]
 
-        if action[0] == 1:
+        if cms_action[0] == 1:
             self.true_quant = 0
-            self.log.critical(f'[THREAD STATUS] >>> CMS Signal On. Signal is {action}')
+            self.log.critical(f'[THREAD STATUS] >>> CMS Signal On. Signal is {cms_action}')
             q = self.money // (float(time[1]) * 250000)
             sheet = order_base(name='cms', scr_num='2000', account=self.order.k.account_num[0],
                                asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=float(time[1]))
@@ -207,7 +220,7 @@ class CMS(QRunnable):
             self.order.send_order_fo(**sheet)
             self.true_quant += q
         else:
-            self.log.critical(f'[THREAD STATUS] >>> CMS Signal Off. Terminating. Signal is {action}')
+            self.log.critical(f'[THREAD STATUS] >>> CMS Signal Off. Terminating. Signal is {cms_action}')
             return
 
         # Check Order
