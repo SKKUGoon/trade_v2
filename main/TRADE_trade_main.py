@@ -30,8 +30,8 @@ class TradeBot(TradeBotUtil):
         # Necessary Modules
         super().__init__()
         self.kiwoom = k
-        self.spec = OrderSpec(k)
-        self.live = LiveDBCon(k)
+        self.spec = OrderSpec.instance(k)
+        self.live = LiveDBCon.instance(k)
         self.morning = self._morn_status()
 
         # Start Thread
@@ -102,19 +102,19 @@ class TradeBot(TradeBotUtil):
         if self.ymd in sat:
             target = {
                 'tts': datetime.datetime.strptime('100020', self.time_format),
-                'cms': datetime.datetime.strptime('163030', self.time_format),
+                'cms': datetime.datetime.strptime('155000', self.time_format),
                 'cmsext': datetime.datetime.strptime('094000', self.time_format)
             }
         elif self.ymd in fb:
             target = {
                 'tts': datetime.datetime.strptime('100020', self.time_format),
-                'cms': datetime.datetime.strptime('153030', self.time_format),
+                'cms': datetime.datetime.strptime('145000', self.time_format),
                 'cmsext': datetime.datetime.strptime('094000', self.time_format)
             }
         else:
             target = {
                 'tts': datetime.datetime.strptime('090020', self.time_format),
-                'cms': datetime.datetime.strptime('153030', self.time_format),
+                'cms': datetime.datetime.strptime('145000', self.time_format),
                 'cmsext': datetime.datetime.strptime('084000', self.time_format)
             }
         return target

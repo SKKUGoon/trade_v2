@@ -12,11 +12,22 @@ class OrderSpec(QMainWindow):
     """
     OrderSpec 1 class handles functions associated with DB connection.
     """
+    __instance = None
     cfg = cp.ConfigParser()
     cfg.read(r'./main/config.ini')
 
     opt_mp = 250000  # unit price for each premium
     opt_tick = 0.01
+
+    @classmethod
+    def __get_instance(cls):
+        return cls.__instance
+
+    @classmethod
+    def instance(cls, *args, **kwargs):
+        cls.__instance = cls(*args, **kwargs)
+        cls.instance = cls.__get_instance
+        return cls.__instance
 
     def __init__(self, k):
         # Kiwoom Api Connection
@@ -38,7 +49,7 @@ class OrderSpec(QMainWindow):
     def req_kw(self, tr_code, **kwargs):
         if tr_code == 'OPTKWFID':
             return None  # Not implemented
-
+        print(tr_code, kwargs)
         for k, v in kwargs.items():
             self.k.set_input_value(k, v)
         tr_name = getattr(TRName, tr_code)
@@ -60,6 +71,7 @@ class OrderSpec(QMainWindow):
         res = self.req_kw('OPW20010', **{'계좌번호': account})
         res = res['싱글데이터']
         return int(res['주문가능현금'])
+
 
     def get_fo_deposit_info(self, account):
         print('point1')
@@ -133,22 +145,33 @@ class OrderSpec(QMainWindow):
         price = res['현재가']
         return dat
 
-    def minute_price_fo(self, code, freq='1') -> float:
+    def minute_price_fo(self, code, freq='1') -> Dict:
         params = {
             "종목코드": code,
             "시간단위": freq,
         }
         while True:
             try:
+                print('heree')
                 dat = self.req_kw(tr_code="opt50067", **params)
+                print('hheee')
                 price = float(self.make_pretty(dat['멀티데이터'][0]['현재가']))
             except Exception:
+                print('nothing')
                 time.sleep(1)
                 continue
             else:
                 break
 
         return dat
+
+    def get_tgtmin_price_fo(self, code, target_min):
+        print('1')
+        res = self.minute_price_fo(code)
+        print('2')
+        for _ in res['멀티데이터']:
+            if self.make_pretty(_['체결시간'])[-6:] == target_min:
+                return self.make_pretty(_['시가'])
 
     def tick_price_base(self, code='201', freq='1') -> float:
         params = {
@@ -259,7 +282,7 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     k = Kiwoom.instance()
     k.connect()
-    ord = OrderSpec(k)
+    ord = OrderSpec.instance(k)
     b = ord.tick_price_fo('201R5425')
     c = ord.minute_price_fo('201R5425')
     d = ord.minute_price_base()

@@ -8,6 +8,18 @@ class LiveDBCon:
     """
     class handles functions associated with DB connection.
     """
+    __instance = None
+
+    @classmethod
+    def __get_instance(cls):
+        return cls.__instance
+
+    @classmethod
+    def instance(cls, *args, **kwargs):
+        cls.__instance = cls(*args, **kwargs)
+        cls.instance = cls.__get_instance
+        return cls.__instance
+
     def __init__(self, k:Kiwoom, termination=datetime.timedelta(hours=1),
                  strategy='CO', screen_num='0001'):
         # Kiwoom Api Connection
@@ -20,6 +32,8 @@ class LiveDBCon:
         self.strategy = strategy
 
         # Local DB connection
+        self.localdb = self.__create_local_db(table_name='RealTime_Index',
+                                              content='index')
         self.localdb = self.__create_local_db(table_name='RT_Option',
                                               content='option')
         self.localdb = self.__create_local_db(table_name='RT_TR_S',
@@ -64,7 +78,10 @@ class LiveDBCon:
         tc = TableColumns()
         if content == 'index':
             params = tc.col_index
-            localdb.create_table(table_name=table_name, variables=params)
+            pk = list(params.keys()).index('code')
+            localdb.create_table_w_pk(table_name=table_name,
+                                      variables=params,
+                                      pk_loc=pk)
 
         elif content == 'time':
             params = tc.col_time
@@ -117,10 +134,19 @@ class LiveDBCon:
         return localdb
 
     def _index_p_to_local(self, table='RealTime_Index'):
-        self.log.critical(f'NOT IMPLEMENTED')
-        for ind in self.k.index_val:
-            col = self.localdb.get_column_list(table)
-            self.localdb.update_rows(table, col, [ind])
+        if len(self.k.index_val) <= 1:
+            for values in self.k.index_val.values():
+                col = self.localdb.get_column_list(table)
+                self.localdb.update_rows(table, col, [values])
+                self.localdb.insert_database(table, col, [values],
+                                             'upsert', key='code')
+
+        elif len(self.k.index_val) > 1:
+            for key, values in self.k.index_val.items():
+                col = self.localdb.get_column_list(table)
+                self.localdb.insert_database(table, col, [values],
+                                             'upsert', key='code')
+
 
     # Live option price related methods
     def req_opt_price(self, asset, cols='10'):
@@ -134,8 +160,6 @@ class LiveDBCon:
 
                 self.localdb.update_rows(table, col, [values])
         elif len(self.k.bid_ask_val) > 1:
-            keys_ = self.k.bid_ask_val.keys()
-
             for key, values in self.k.bid_ask_val.items():
                 col = self.localdb.get_column_list(table)
 
@@ -179,7 +203,7 @@ class LiveDBCon:
                                          set_val=[[self.k.servertime['servertime']]])
 
     # Wrapper for uploading
-    def live_price_wrap(self, needs=(False, True, True)):
+    def live_price_wrap(self, needs=(True, True, True)):
         self._time_to_local()
         if needs[0] is True:
             self._index_p_to_local()
