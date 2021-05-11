@@ -80,7 +80,7 @@ def import_SAT_days(datefrom: str):
     return SAT_days
 
 
-def update_opt_path(where=f'./Data/forshare/'):
+def update_opt_path(where=f'D:/trade_db/fixed_time_strategy_data/0to34/'):
     first_busi_days = import_1stBusi_days(datefrom='20160731')
     maturity_days = import_maturity_days(datefrom='20160731')
     SAT_days = import_SAT_days(datefrom='20160731')
@@ -240,11 +240,11 @@ def get_12_15_signal(opt_path_call, opt_path_call_close):
 
     return X_12_15_call_opt
 
-def prediction(train_window=65, nf_9=6, nf_12=6):
+def prediction(ATM_index, price_open_1459, price_close_1459, train_window=65, nf_9=6, nf_12=6):
     today = int(datetime.today().strftime(format="%Y%m%d"))
 
     opt_path_call, opt_path_call_close = update_opt_path()
-    today_path, today_path_close = get_today_path()
+    today_path, today_path_close = get_today_path(ATM_index, price_open_1459, price_close_1459)
 
     signal_list = opt_path_call.columns[opt_path_call.columns.astype(int) < 1500].tolist()
 
@@ -306,6 +306,6 @@ def prediction(train_window=65, nf_9=6, nf_12=6):
 
     return prediction
 
-pred = prediction()
+pred = prediction(ATM_index=428.93, price_open_1459=2.71, price_close_1459=2.73)
 
 print(pred)
