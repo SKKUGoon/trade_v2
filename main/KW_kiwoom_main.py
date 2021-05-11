@@ -17,7 +17,7 @@ class Kiwoom(QAxWidget):
 
     __instance = None  # Singleton Pattern to keep the values of class instance
 
-    index_val = list()
+    index_val = dict()
     bid_ask_val = dict()
     servertime = dict()
 
@@ -205,11 +205,10 @@ class Kiwoom(QAxWidget):
             val = val.lstrip('+')
             val = val.lstrip('-')
             data.append(val)
-
         if real_type in {'옵션시세'}:  # For more asset fix here:
             self.bid_ask_val[code] = tuple(data)  # Tuple is hashable
         elif real_type == '업종지수':
-            self.index_val.append(tuple(data))
+            self.index_val[code] = tuple(data)
         elif real_type == '옵션호가잔량':
             self.servertime['servertime'] = data[2]
         else:
@@ -275,6 +274,7 @@ class Kiwoom(QAxWidget):
         if not self.connect_status:
             raise KiwoomConnectionError("Kiwoom server not connected")
         res = self.dynamicCall(*comm_rq_data(rq_name, tr_code, prev_next, screen_num))
+        print('herecommrq')
         if res != 0:  # Successful only if 0
             t = datetime.datetime.now()
             err = getattr(ReturnCode, "CAUSE").get(res)
