@@ -4,13 +4,16 @@ from main.KWDERIV_live_db_conn import LiveDBCon
 from main.KWDERIV_order_spec import OrderSpec
 
 from data.DATA_cms_update import *
+from data.DATA_00to34_update import prediction
 
 from util.UTIL_dbms import *
 from util.UTIL_log import *
 from util.UTIL_set_order import *
+from util.UTIL_asset_code import *
 
 from strategy.FACTORY_fixed_time import FTFactory
 from strategy.STRAT_cms import FTCMS
+from strategy.STRAT_zero_to_thirtyfour import FTZeroThirtyFour
 
 import datetime
 import threading
@@ -28,6 +31,7 @@ class CMS(QRunnable):
 
         parm = FTFactory()
         self.timeline, self.timelimit, _ = parm.timing(FTCMS())
+        self.zttf_timeline, self.zttf_timelimit, _ = parm.timing(FTZeroThirtyFour())
         self.get_trade_params(leverage)
 
     def get_trade_params(self, leverage):
@@ -86,7 +90,7 @@ class CMS(QRunnable):
         self.log.critical("Checking Not-executed Orders.")
 
         while True:
-            QThread.sleep(4)
+            QThread.sleep(2)
             try:
                 col = ['TICKER', 'ORDER_QTY', 'ORDER_PRICE', 'UNEX_QTY', 'ORDER_NO', 'TRAN_QTY']
                 cond = f"SCREEN_NUM = '{screen_num}' and SELL_BUY_GUBUN = '{sellbuy}'"
@@ -144,6 +148,19 @@ class CMS(QRunnable):
                 self.true_quant += new_quantity
                 self.order.send_order_fo(**new_order)
 
+    def _create_atm(self, values) -> str:
+        mat = get_exception_date('MaturityDay')
+        for days in mat:
+            if self.ymd[:6] == days[:6]:
+                m = days  # maturity date in question
+                break
+        if self.ymd <= m:
+            bfaf = 'before'
+        else:
+            bfaf = 'after'
+        atm = asset_code_gen(values, 'call_option', datetime.datetime.now(), bfaf)
+        return atm
+
     def run(self):
         self.log.debug(
             f'[THREAD STATUS] >>> CMS Running on {threading.current_thread().getName()}'
@@ -159,22 +176,59 @@ class CMS(QRunnable):
         self.local = LocalDBMethods2(loc)
         self.local.conn.execute("PRAGMA journal_mode=WAL")
 
-        # Zero to ThirtyFour Minute
-        self.zttf = False
-        'Get ATM'
-        'Get Close, Open of that ATM'
-        'Fit Model'
-        zttf_action = ...
-        if zttf_action == 1:
-            self.zttf = True
-            self.zttf_quant = 0
-            self.log.critical(f'[THREAD STATUS] >>> ZTTF Signal On. Signal is {zttf_action}')
-
+        # # Zero to ThirtyFour Minute
+        # self.zttf = False
+        # while True:
+        #     try:
+        #         time = self.local.select_db(
+        #             target_table='RealTime_Index',
+        #             target_column=['servertime', 'price'])[0]
+        #     except Exception as e:
+        #         self.log.error(e)
+        #         self.log.error('Index Value Missing. Restart')
+        #         continue
+        #
+        #     if time[0] == '0':
+        #         continue
+        #
+        #     if time[0] >= self.zttf_timeline[0]:
+        #         atm_3 = float(time[1])
+        #         break
+        #
+        # atm = self._create_atm(atm_3)
+        # print(atm)
+        # open59, close59 = (self.order.get_tgtmin_price_fo(atm, ''),
+        #                    self.order.get_tgtmin_price_fo(atm, ''))
+        # self.log.debug(f"Asset: {atm}, Price at {open59}, {close59}")
+        # self.live.req_opt_price(atm)
+        # zttf_res = prediction(ATM_index=atm,
+        #                       price_open_1459=open59,
+        #                       price_close_1459=close59)
+        # print('prediction for', zttf_res.index.tolist()[-1])
+        # zttf_action, zttf_score = zttf_res.to_numpy().tolist()[-1]
+        # if zttf_action == 1:
+        #     self.zttf = True
+        #     self.zttf_quant = 0
+        #     self.log.critical(
+        #         f'[THREAD STATUS] >>> ZTTF Signal On. Signal is {zttf_action}, score is {zttf_score}'
+        #     )
+        #     q = self.money // (float(time[1]) * 250000)
+        #     sheet = order_base(name='cms', scr_num='2000', account=self.order.k.account_num[0],
+        #                        asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=float(time[1]))
+        #     self.log.critical(f'[THREAD STATUS] >>> (BID) Sending Order {sheet}')
+        #     self.order.send_order_fo(**sheet)
+        #     self.true_quant += q
+        # else:
+        #     self.zttf = False
+        #     self.log.critical(
+        #         f'[THREAD STATUS] >>> ZTTF Signal Off. Signal is {zttf_action}, score is {zttf_score}'
+        #     )
 
 
         # Get CMS Data
         path_31_34 = list()
         target = 0
+        self.atm = get_today_asset_code()
         while True:
             try:
                 cond = f"code = '{self.atm}'"
