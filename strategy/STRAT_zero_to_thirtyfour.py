@@ -11,16 +11,16 @@ class FTZeroThirtyFour(FTManager):
 
         today = datetime.datetime.now().strftime('%Y%m%d')
         if today in sat:
-            state = ['']
-            limit = ['']
-            end = ['']
+            state = ['160000']
+            limit = ['160020']
+            end = ['163400']
 
         else:
-            state = ['']
-            limit = ['']
-            end = ['']
+            state = ['150000']
+            limit = ['150020']
+            end = ['153400']
 
-        return states, limit, end
+        return state, limit, end
 
     def my_name(self):
         return 'FTZeroThrityFour'
