@@ -8,6 +8,7 @@ class TableColumns:
     col_index = {
         'code' : 'Varchar(20)',
         'days' : 'Varchar(20)',
+        'servertime' : 'Varchar(20)',
         'price' : 'Varchar(20)'
     }
 
