@@ -24,7 +24,7 @@ import pickle
 class TwoToSeven(QRunnable):
     ymd = datetime.datetime.now().strftime('%Y%m%d')
 
-    def __init__(self, orderspec:OrderSpec, live:LiveDBCon, morning:bool, leverage=0.05):
+    def __init__(self, orderspec:OrderSpec, live:LiveDBCon, morning:bool, leverage=0.5):
         super().__init__()
         self.morning = morning
         self.order = orderspec
@@ -265,7 +265,7 @@ class TwoToSeven(QRunnable):
             self.log.critical(f'[THREAD STATUS] >>> TTS Signal On. Signal is {final_pred}')
             q = self.money // (float(time[1]) * 250000)
             sheet = order_base(name='tts', scr_num='1000', account=self.order.k.account_num[0],
-                               asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=0.01)#float(time[1]))
+                               asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=float(time[1]))
             self.log.critical(f'[THREAD STATUS] >>> (BID) Sending Order {sheet}')
             self.order.send_order_fo(**sheet)
             self.true_quant += q
