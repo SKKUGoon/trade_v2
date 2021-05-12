@@ -306,6 +306,7 @@ def prediction(ATM_index, price_open_1459, price_close_1459, train_window=65, nf
 
     return prediction
 
-pred = prediction(ATM_index=428.93, price_open_1459=2.71, price_close_1459=2.73)
+if __name__ == '__main__':
+    pred = prediction(ATM_index=428.93, price_open_1459=2.71, price_close_1459=2.73)
 
-print(pred)
+    print(pred)

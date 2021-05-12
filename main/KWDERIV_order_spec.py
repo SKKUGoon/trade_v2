@@ -287,3 +287,4 @@ if __name__ == '__main__':
     c = ord.minute_price_fo('201R5425')
     d = ord.minute_price_base()
     ord.get_fo_deposit_info(k.account_num[0])
+    ord.get_tgtmin_price_fo('201R5425', '150000')

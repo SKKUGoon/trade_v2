@@ -306,7 +306,7 @@ class TwoToSeven(QRunnable):
                 sheet = order_base(
                     name='tts', scr_num='1100', account=self.order.k.account_num[0],
                     asset=self.atm, buy_sell=1, trade_type=1, quantity=int(self.true_quant),
-                    price=float(time[1])
+                    price=float(time[1])-5
                 )
                 self.log.critical(f'[THREAD STATUS] >>> (ASK) Sending Order {sheet}')
                 self.order.send_order_fo(**sheet)

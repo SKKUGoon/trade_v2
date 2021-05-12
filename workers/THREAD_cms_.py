@@ -40,8 +40,8 @@ class CMS(QRunnable):
         self.log.critical(f'[THREAD STATUS] >>> Account Money at {self.money}')
 
         # Real Time Price Information
-        self.atm = get_today_asset_code()  # execute after 15:00:00
-        self.live.req_opt_price(self.atm)
+        # self.atm = get_today_asset_code()  # execute after 15:00:00
+        # self.live.req_opt_price(self.atm)
 
     def chk_cancel(self, screen_num, sellbuy, asset, original, original_unexec) -> any:
         self.log.critical("Checking Cancellation")
@@ -176,53 +176,53 @@ class CMS(QRunnable):
         self.local = LocalDBMethods2(loc)
         self.local.conn.execute("PRAGMA journal_mode=WAL")
 
-        # # Zero to ThirtyFour Minute
-        # self.zttf = False
-        # while True:
-        #     try:
-        #         time = self.local.select_db(
-        #             target_table='RealTime_Index',
-        #             target_column=['servertime', 'price'])[0]
-        #     except Exception as e:
-        #         self.log.error(e)
-        #         self.log.error('Index Value Missing. Restart')
-        #         continue
-        #
-        #     if time[0] == '0':
-        #         continue
-        #
-        #     if time[0] >= self.zttf_timeline[0]:
-        #         atm_3 = float(time[1])
-        #         break
-        #
-        # atm = self._create_atm(atm_3)
-        # print(atm)
-        # open59, close59 = (self.order.get_tgtmin_price_fo(atm, ''),
-        #                    self.order.get_tgtmin_price_fo(atm, ''))
-        # self.log.debug(f"Asset: {atm}, Price at {open59}, {close59}")
-        # self.live.req_opt_price(atm)
-        # zttf_res = prediction(ATM_index=atm,
-        #                       price_open_1459=open59,
-        #                       price_close_1459=close59)
-        # print('prediction for', zttf_res.index.tolist()[-1])
-        # zttf_action, zttf_score = zttf_res.to_numpy().tolist()[-1]
-        # if zttf_action == 1:
-        #     self.zttf = True
-        #     self.zttf_quant = 0
-        #     self.log.critical(
-        #         f'[THREAD STATUS] >>> ZTTF Signal On. Signal is {zttf_action}, score is {zttf_score}'
-        #     )
-        #     q = self.money // (float(time[1]) * 250000)
-        #     sheet = order_base(name='cms', scr_num='2000', account=self.order.k.account_num[0],
-        #                        asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=float(time[1]))
-        #     self.log.critical(f'[THREAD STATUS] >>> (BID) Sending Order {sheet}')
-        #     self.order.send_order_fo(**sheet)
-        #     self.true_quant += q
-        # else:
-        #     self.zttf = False
-        #     self.log.critical(
-        #         f'[THREAD STATUS] >>> ZTTF Signal Off. Signal is {zttf_action}, score is {zttf_score}'
-        #     )
+        # Zero to ThirtyFour Minute
+        self.zttf = False
+        while True:
+            try:
+                time = self.local.select_db(
+                    target_table='RealTime_Index',
+                    target_column=['servertime', 'price'])[0]
+            except Exception as e:
+                self.log.error(e)
+                self.log.error('Index Value Missing. Restart')
+                continue
+
+            if time[0] == '0':
+                continue
+
+            if time[0] >= self.zttf_timeline[0]:
+                atm_3 = float(time[1])
+                break
+
+        atm = self._create_atm(atm_3)
+        print(atm)
+        open59, close59 = (self.order.get_tgtmin_price_fo(atm, self.zttf_timeline[0]),
+                           self.order.get_tgtmin_price_fo(atm, self.zttf_timeline[1]))
+        self.log.debug(f"Asset: {atm}, Price at {open59}, {close59}")
+        self.live.req_opt_price(atm)
+        zttf_res = prediction(ATM_index=atm,
+                              price_open_1459=open59,
+                              price_close_1459=close59)
+        print('prediction for', zttf_res.index.tolist()[-1])
+        zttf_action, zttf_score = zttf_res.to_numpy().tolist()[-1]
+        if zttf_action == 1:
+            self.zttf = True
+            self.zttf_quant = 0
+            self.log.critical(
+                f'[THREAD STATUS] >>> ZTTF Signal On. Signal is {zttf_action}, score is {zttf_score}'
+            )
+            q = self.money // (float(time[1]) * 250000)
+            sheet = order_base(name='zttf', scr_num='3000', account=self.order.k.account_num[0],
+                               asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=float(time[1]))
+            self.log.critical(f'[THREAD STATUS] >>> (BID) Sending Order {sheet}')
+            self.order.send_order_fo(**sheet)
+            self.zttf_quant += q
+        else:
+            self.zttf = False
+            self.log.critical(
+                f'[THREAD STATUS] >>> ZTTF Signal Off. Signal is {zttf_action}, score is {zttf_score}'
+            )
 
 
         # Get CMS Data
@@ -265,16 +265,26 @@ class CMS(QRunnable):
         cms_action = today_pred.to_numpy().tolist()[-1]
 
         if cms_action[0] == 1:
-            self.true_quant = 0
-            self.log.critical(f'[THREAD STATUS] >>> CMS Signal On. Signal is {cms_action}')
-            q = self.money // (float(time[1]) * 250000)
-            sheet = order_base(name='cms', scr_num='2000', account=self.order.k.account_num[0],
-                               asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=float(time[1]))
-            self.log.critical(f'[THREAD STATUS] >>> (BID) Sending Order {sheet}')
-            self.order.send_order_fo(**sheet)
-            self.true_quant += q
+            if self.zttf is False:
+                self.true_quant = 0
+                self.log.critical(f'[THREAD STATUS] >>> CMS Signal On. Signal is {cms_action}')
+                q = self.money // (float(time[1]) * 250000)
+                sheet = order_base(name='cms', scr_num='2000', account=self.order.k.account_num[0],
+                                   asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=float(time[1]))
+                self.log.critical(f'[THREAD STATUS] >>> (BID) Sending Order {sheet}')
+                self.order.send_order_fo(**sheet)
+                self.true_quant += q
+            else:
+                return  # ZTTF Strategy already bought the same asset as CMS
         else:
             self.log.critical(f'[THREAD STATUS] >>> CMS Signal Off. Terminating. Signal is {cms_action}')
+            # TODO sell ZTTF
+            sheet = order_base(
+                name='zttf', scr_num='3000', account=self.order.k.account_num[0],
+                asset=self.atm, buy_sell=1, trade_type=1, quantity=int(self.zttf_quant),
+                price=float(time[1]) - 5
+            )
+            self.order.send_order_fo(**sheet)
             return
 
         # Check Order
