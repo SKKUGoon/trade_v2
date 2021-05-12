@@ -40,8 +40,8 @@ class CMS(QRunnable):
         self.log.critical(f'[THREAD STATUS] >>> Account Money at {self.money}')
 
         # Real Time Price Information
-        # self.atm = get_today_asset_code()  # execute after 15:00:00
-        # self.live.req_opt_price(self.atm)
+        # Get Candidates
+
 
     def chk_cancel(self, screen_num, sellbuy, asset, original, original_unexec) -> any:
         self.log.critical("Checking Cancellation")
