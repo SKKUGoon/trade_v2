@@ -33,6 +33,7 @@ class TradeBot(TradeBotUtil):
         self.spec = OrderSpec.instance(k)
         self.live = LiveDBCon.instance(k)
         self.morning = self._morn_status()
+        self.maturity = self._maturity_status()
 
         # Start Thread
         self.create_threadpool()
@@ -60,6 +61,13 @@ class TradeBot(TradeBotUtil):
         else:
             return until
 
+    def _maturity_status(self):
+        mat = get_exception_date('MaturityDay')
+        for days in mat:
+            if self.ymd == days:
+                return True
+        return False
+
     def _morn_status(self):
         if self.hms <= '120000':
             return True
@@ -83,6 +91,7 @@ class TradeBot(TradeBotUtil):
         self.log.critical('CMS Thread Starting')
         cms = CMS(orderspec=self.spec,
                   morning=self.morning,
+                  maturity=self.maturity,
                   live=self.live)
 
         self.pool.start(cms)
@@ -114,7 +123,7 @@ class TradeBot(TradeBotUtil):
         else:
             target = {
                 'tts': datetime.datetime.strptime('090020', self.time_format),
-                'cms': datetime.datetime.strptime('145000', self.time_format),
+                'cms': datetime.datetime.strptime('145000', self.time_format),  # TODO Change
                 'cmsext': datetime.datetime.strptime('084000', self.time_format)
             }
         return target
