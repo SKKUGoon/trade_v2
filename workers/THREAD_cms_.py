@@ -20,10 +20,12 @@ import threading
 
 
 class CMS(QRunnable):
-    ymd = datetime.datetime.now().strftime('%Y%m%d')
+    ymd_dt = datetime.datetime.now()
+    ymd = ymd_dt.strftime('%Y%m%d')
 
-    def __init__(self, orderspec:OrderSpec, live:LiveDBCon,morning:bool, leverage=0.5):
+    def __init__(self, orderspec:OrderSpec, live:LiveDBCon, morning:bool, maturity:bool, leverage=0.5):
         super().__init__()
+        self.maturity = maturity
         self.morning = morning
         self.order = orderspec
         self.live = live
@@ -34,14 +36,46 @@ class CMS(QRunnable):
         self.zttf_timeline, self.zttf_timelimit, _ = parm.timing(FTZeroThirtyFour())
         self.get_trade_params(leverage)
 
+    def _mat_days(self):
+        mat = get_exception_date('MaturityDay')
+        tgt = None
+        for days in mat:
+            if days[:6] == self.ymd[:6]:
+                tgt = days
+        if self.ymd < tgt:
+            return 'before'
+        else:
+            return 'after'
+
+
     def get_trade_params(self, leverage):
         self.money = self.order.get_fo_margin_info(self.order.k.account_num[0])
         self.money = self.money * leverage
         self.log.critical(f'[THREAD STATUS] >>> Account Money at {self.money}')
 
-        # Real Time Price Information
-        # Get Candidates
+        # Get +2 -2 OTMs and ITM
+        loc = r'D:\trade_db\local_trade._db'
+        local = LocalDBMethods2(loc)
+        local.conn.execute("PRAGMA journal_mode=WAL")
 
+        otm_itm = [-3, -2, -1, 0, 1, 2, 3]  # otm 3, itm 3, atm 1
+        while True:
+            try:
+                res = local.select_db(
+                    target_column=['price'],
+                    target_table='RealTime_Index'
+                )[0][0]
+            except Exception as e:
+                print('err', e)
+            else:
+                break
+        opt_ls = [asset_code_gen(index=(tm * 2.5) + float(res),
+                                 type_='call_option',
+                                 date_info=self.ymd_dt,
+                                 bfaf=self._mat_days())
+                  for tm in otm_itm]
+        for opt in opt_ls:
+            self.live.req_opt_price(opt)
 
     def chk_cancel(self, screen_num, sellbuy, asset, original, original_unexec) -> any:
         self.log.critical("Checking Cancellation")
@@ -154,7 +188,7 @@ class CMS(QRunnable):
             if self.ymd[:6] == days[:6]:
                 m = days  # maturity date in question
                 break
-        if self.ymd <= m:
+        if self.ymd < m:
             bfaf = 'before'
         else:
             bfaf = 'after'
@@ -167,9 +201,13 @@ class CMS(QRunnable):
         )
         if self.morning is True:
             self.log.debug(
-                f'[THREAD STATUS] >>> CMS Breaking on {threading.current_thread().getName()}'
+                f'[THREAD STATUS] >>> CMS Breaking on {threading.current_thread().getName()}. Not Afternoon'
             )
             return
+        # if self.maturity is True:
+        #     self.log.debug(
+        #         f'[THREAD STATUS] >>> CMS Breaking on {threading.current_thread().getName()}. Maturity'
+        #     )
 
         # Connection to Local Database
         loc = r'D:\trade_db\local_trade._db'
@@ -178,11 +216,24 @@ class CMS(QRunnable):
 
         # Zero to ThirtyFour Minute
         self.zttf = False
+        opt_price = dict()
         while True:
             try:
                 time = self.local.select_db(
                     target_table='RealTime_Index',
                     target_column=['servertime', 'price'])[0]
+                opt = self.local.select_db(
+                    target_table='RT_Option',
+                    target_column=['code', 'server_time', 'p_current']
+                )
+                for c, t, p in opt:
+                    opt_price[c] = dict()
+                    if self.zttf_timeline[0] < t < self.zttf_timeline[1]:
+                        if 'open' in opt_price[c].keys():
+                            opt_price[c]['close'] = float(p)
+                        else:
+                            opt_price[c]['open'] = float(p)
+
             except Exception as e:
                 self.log.error(e)
                 self.log.error('Index Value Missing. Restart')
@@ -191,20 +242,27 @@ class CMS(QRunnable):
             if time[0] == '0':
                 continue
 
-            if time[0] >= self.zttf_timeline[0]:
+            if time[0] >= self.zttf_timeline[1]:
                 atm_3 = float(time[1])
+                for k, val in opt_price.items():  # If no trade made, use the most recent observation as value
+                    if 'open' not in val.keys():
+                        for c, t, p in opt:
+                            if k == c:
+                                opt_price[c]['open'], opt_price[c]['close'] = float(p), float(p)
                 break
-
+        print(opt_price)
         atm = self._create_atm(atm_3)
         print(atm)
-        open59, close59 = (self.order.get_tgtmin_price_fo(atm, self.zttf_timeline[0]),
-                           self.order.get_tgtmin_price_fo(atm, self.zttf_timeline[1]))
+        try:
+            assert atm in opt_price.keys(), 'Due to Volatility, atm not in atm candidate'
+        except AssertionError as e:
+            self.log.error(e)
+            return
+        open59, close59 = (opt_price[atm]['open'], opt_price[atm]['close'])
         self.log.debug(f"Asset: {atm}, Price at {open59}, {close59}")
-        self.live.req_opt_price(atm)
         zttf_res = prediction(ATM_index=atm,
                               price_open_1459=open59,
                               price_close_1459=close59)
-        print('prediction for', zttf_res.index.tolist()[-1])
         zttf_action, zttf_score = zttf_res.to_numpy().tolist()[-1]
         if zttf_action == 1:
             self.zttf = True
@@ -212,20 +270,42 @@ class CMS(QRunnable):
             self.log.critical(
                 f'[THREAD STATUS] >>> ZTTF Signal On. Signal is {zttf_action}, score is {zttf_score}'
             )
-            q = self.money // (float(time[1]) * 250000)
+            q = self.money // ((float(time[1]) + 0.05) * 250000)
             sheet = order_base(name='zttf', scr_num='3000', account=self.order.k.account_num[0],
-                               asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=float(time[1]))
+                               asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=(float(time[1]) + 0.01))
             self.log.critical(f'[THREAD STATUS] >>> (BID) Sending Order {sheet}')
             self.order.send_order_fo(**sheet)
             self.zttf_quant += q
+
+            while True:
+                try:
+                    cond = f"SCREEN_NUM='3000'"
+                    submitted = self.local.select_db(
+                        target_table='RT_TR_S', target_column=['ORDER_STATUS'], condition1=cond
+                    )[0][0]
+                except Exception as e:
+                    continue
+
+                if submitted == '접수':
+                    self.log.critical('[THREAD STATUS] >>> (BID) ZTTF Order is in')
+                    self.chk_order('3000', 2, atm_3, self.zttf_quant)
+                    self.log.critical('[THREAD STATUS] >>> (BID) ZTTF Order Check Done')
+                else:
+                    self.log.error('[THREAD STATUS] >>> ZTTF Order is not in. ')
+                    return
+                self.log.critical(
+                    f'[THREAD STATUS] >>> ZTTF Strat Resulting Quantity {self.zttf_quant}'
+                )
         else:
             self.zttf = False
             self.log.critical(
                 f'[THREAD STATUS] >>> ZTTF Signal Off. Signal is {zttf_action}, score is {zttf_score}'
             )
 
-
         # Get CMS Data
+        self.log.debug(
+            '[THREAD STATUS] >>> ZTTF Done. Waiting For CMS'
+        )
         path_31_34 = list()
         target = 0
         self.atm = get_today_asset_code()
@@ -265,9 +345,9 @@ class CMS(QRunnable):
         cms_action = today_pred.to_numpy().tolist()[-1]
 
         if cms_action[0] == 1:
+            self.log.critical(f'[THREAD STATUS] >>> CMS Signal On. Signal is {cms_action}')
             if self.zttf is False:
                 self.true_quant = 0
-                self.log.critical(f'[THREAD STATUS] >>> CMS Signal On. Signal is {cms_action}')
                 q = self.money // (float(time[1]) * 250000)
                 sheet = order_base(name='cms', scr_num='2000', account=self.order.k.account_num[0],
                                    asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=float(time[1]))
@@ -275,6 +355,7 @@ class CMS(QRunnable):
                 self.order.send_order_fo(**sheet)
                 self.true_quant += q
             else:
+                self.log.critical(f'[THREAD STATUS] >>> Inheriting ZTTF Asset. Quantity {self.zttf_quant}')
                 return  # ZTTF Strategy already bought the same asset as CMS
         else:
             self.log.critical(f'[THREAD STATUS] >>> CMS Signal Off. Terminating. Signal is {cms_action}')
@@ -282,7 +363,7 @@ class CMS(QRunnable):
             sheet = order_base(
                 name='zttf', scr_num='3000', account=self.order.k.account_num[0],
                 asset=self.atm, buy_sell=1, trade_type=1, quantity=int(self.zttf_quant),
-                price=float(time[1]) - 5
+                price=float(time[1]) - 0.05
             )
             self.order.send_order_fo(**sheet)
             return
