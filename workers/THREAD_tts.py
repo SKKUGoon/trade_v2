@@ -259,6 +259,7 @@ class TwoToSeven(QRunnable):
         cscr_pred = [self.models[0].decision_function(self.model1_feat)[0],
                      self.models[1].decision_function([self.model2_feat])[0]]
         final_pred = self.models[2].predict([cscr_pred])[0]  # If True, enter market
+
         # Bid
         if final_pred is True or final_pred == 1:
             self.true_quant = 0
@@ -306,7 +307,7 @@ class TwoToSeven(QRunnable):
                 sheet = order_base(
                     name='tts', scr_num='1100', account=self.order.k.account_num[0],
                     asset=self.atm, buy_sell=1, trade_type=1, quantity=int(self.true_quant),
-                    price=float(time[1])-5
+                    price=float(time[1]) - 0.05
                 )
                 self.log.critical(f'[THREAD STATUS] >>> (ASK) Sending Order {sheet}')
                 self.order.send_order_fo(**sheet)
