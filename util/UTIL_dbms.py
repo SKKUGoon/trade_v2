@@ -239,6 +239,25 @@ class LocalDBMethods2:
         # Execute
         self._execute_query(qry, multiple=False)
 
+    def select_distinct(self, target_column: Iterable[str], target_table:str,
+                        condition1:str=None):
+        col = ', '.join(str(cols) for cols in target_column)
+        qry = f"SELECT DISTINCT {col} FROM {target_table}"
+
+        if condition1 is not None:
+            qry = qry + f' where {condition1}'
+        else:
+            pass
+
+        # Execute
+        c = self.conn.cursor()
+        c.execute(qry)
+
+        # Result
+        res = c.fetchall()
+        c.close()
+        return res
+
     def select_db(self, target_column: Iterable[str], target_table: str,
                   condition1:str=None, condition2:str=None):
         """
