@@ -11,12 +11,12 @@ class FTZeroThirtyFour(FTManager):
 
         today = datetime.datetime.now().strftime('%Y%m%d')
         if today in sat:
-            state = ['155900, 160000']
+            state = ['155900', '160000']
             limit = ['160020']
             end = ['163400']
 
         else:
-            state = ['145900, 150000']
+            state = ['145900', '150000']
             limit = ['150020']
             end = ['153400']
 
