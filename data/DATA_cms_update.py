@@ -349,6 +349,14 @@ def get_recent_opt_path_open(option_ATM_df_open):
             opt_prc_df_tem['time'] = opt_prc_time.astype(int)
         try:
             opt_prc_df_tem = opt_prc_df_tem.set_index(['time'], True).sort_index()
+            # Create Baseline
+            baseline = pd.DataFrame(list(range(0, 31)))
+            fit_base = pd.concat([opt_prc_df_tem, baseline],
+                                 axis=1).ffill().bfill()
+            fit_base = fit_base.set_index(fit_base[fit_base.columns[1]])
+            fit_base.columns = ['opt_open', 'time']
+            fit_base = fit_base.set_index('time', drop=True)
+            opt_prc_df_tem = fit_base
             recent_opt_path_call_open.loc[int(days)] = opt_prc_df_tem['opt_open'].tolist()
         except:
             pass
