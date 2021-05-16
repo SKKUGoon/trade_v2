@@ -554,6 +554,19 @@ def cms_prediction(opt_path_call, co_return, p31_34=(2.90, 2.93, 2.98, 2.90)):
 
     return today_pred
 
+def cms_prediction_manual(opt_path_call, co_return, p31_34=(2.90, 2.93, 2.98, 2.90)):
+    asset_call = get_today_asset_code()
+    p31_34 = list()
+    for i in range(4):
+        a = float(input())
+        p31_34.append(a)
+    opt_prc_today = get_today_path(asset_call, 55, *p31_34)
+    opt_path_call_fl = gen_features(opt_path_call, opt_prc_today, signal_window=55)
+    today_pred = train_and_pred(opt_path_call_fl, co_return, train_window=104, bc_1st=1, cw_1st=None,
+                                train_window_2nd=10, bc_2nd=12.6, ks_con_2nd=9.8, cw_2nd=None)
+
+    return today_pred
+
 if __name__ == '__main__':
     opt_path_call, opt_path_call_open, co_return = cms_update_data()
     asset_call = get_today_asset_code()
