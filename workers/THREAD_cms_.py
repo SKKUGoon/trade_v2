@@ -204,10 +204,11 @@ class CMS(QRunnable):
                 f'[THREAD STATUS] >>> CMS Breaking on {threading.current_thread().getName()}. Not Afternoon'
             )
             return
-        # if self.maturity is True:
-        #     self.log.debug(
-        #         f'[THREAD STATUS] >>> CMS Breaking on {threading.current_thread().getName()}. Maturity'
-        #     )
+
+        if self.maturity is True:
+            self.log.debug(
+                f'[THREAD STATUS] >>> CMS Breaking on {threading.current_thread().getName()}. Maturity'
+            )
 
         # Connection to Local Database
         loc = r'D:\trade_db\local_trade._db'
@@ -253,10 +254,12 @@ class CMS(QRunnable):
         print(opt_price)
         atm = self._create_atm(atm_3)
         print(atm)
+        zttf_signal = True
         try:
             assert atm in opt_price.keys(), 'Due to Volatility, atm not in atm candidate'
         except AssertionError as e:
             self.log.error(e)
+            zttf_signal = False
             return
         open59, close59 = (opt_price[atm]['open'], opt_price[atm]['close'])
         self.log.debug(f"Asset: {atm}, Price at {open59}, {close59}")
@@ -264,7 +267,7 @@ class CMS(QRunnable):
                               price_open_1459=open59,
                               price_close_1459=close59)
         zttf_action, zttf_score = zttf_res.to_numpy().tolist()[-1]
-        if zttf_action == 1:
+        if zttf_signal and zttf_action == 1:
             self.zttf = True
             self.zttf_quant = 0
             self.log.critical(
