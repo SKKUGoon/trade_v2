@@ -50,7 +50,7 @@ class LiveDBCon:
         self.log = Logger(path=loc, name='Live_DB_log')
 
         self.local_db_qry = QTimer(self.k)
-        self.local_db_qry.start(100 * 0.1)
+        self.local_db_qry.start(50 * 0.1)
         self.local_db_qry.timeout.connect(self.live_price_wrap)
 
         self.stop_cond = QTimer(self.k)
