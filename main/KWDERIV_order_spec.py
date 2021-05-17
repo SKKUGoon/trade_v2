@@ -49,7 +49,6 @@ class OrderSpec(QMainWindow):
     def req_kw(self, tr_code, **kwargs):
         if tr_code == 'OPTKWFID':
             return None  # Not implemented
-        print(tr_code, kwargs)
         for k, v in kwargs.items():
             self.k.set_input_value(k, v)
         tr_name = getattr(TRName, tr_code)
@@ -74,7 +73,6 @@ class OrderSpec(QMainWindow):
 
 
     def get_fo_deposit_info(self, account):
-        print('point1')
         col = {
             '계좌번호': 'account_num',
             '종목코드': 'asset_code',
@@ -87,7 +85,6 @@ class OrderSpec(QMainWindow):
         for asset_info in res:
             for k, v in asset_info.items():
                 asset_info[k] = self.make_pretty(v)
-        print('point2')
         have = list()  # Asset have
         had = list()  # Asset had
         for asset in res:
@@ -99,7 +96,6 @@ class OrderSpec(QMainWindow):
                 had.append(
                     dict((col[key], value) for (key, value) in asset.items())
                 )
-        print('point3')
         return have, had
 
     def _exception_date(self, type_: str, table='ftsdc') -> set:
@@ -152,12 +148,9 @@ class OrderSpec(QMainWindow):
         }
         while True:
             try:
-                print('heree')
                 dat = self.req_kw(tr_code="opt50067", **params)
-                print('hheee')
                 price = float(self.make_pretty(dat['멀티데이터'][0]['현재가']))
             except Exception:
-                print('nothing')
                 time.sleep(1)
                 continue
             else:
@@ -166,9 +159,7 @@ class OrderSpec(QMainWindow):
         return dat
 
     def get_tgtmin_price_fo(self, code, target_min):
-        print('1')
         res = self.minute_price_fo(code)
-        print('2')
         for _ in res['멀티데이터']:
             if self.make_pretty(_['체결시간'])[-6:] == target_min:
                 return self.make_pretty(_['시가'])
