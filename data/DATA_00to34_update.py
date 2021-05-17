@@ -153,7 +153,7 @@ def update_opt_path(where=f'D:/trade_db/fixed_time_strategy_data/0to34/'):
 
     return opt_path_call, opt_path_call_close
 
-def get_today_path(ATM_index=428.93, price_open_1459=2.71, price_close_1459=2.73):
+def get_today_path(ATM_index=418.68, price_open_1459=6.62, price_close_1459=6.52):
 
     first_busi_days = import_1stBusi_days(datefrom='20160731')
     maturity_days = import_maturity_days(datefrom='20160731')
@@ -307,6 +307,6 @@ def prediction(ATM_index, price_open_1459, price_close_1459, train_window=65, nf
     return prediction
 
 if __name__ == '__main__':
-    pred = prediction(ATM_index=428.93, price_open_1459=2.71, price_close_1459=2.73)
+    pred = prediction(ATM_index=418.68, price_open_1459=6.62, price_close_1459=6.52)
 
     print(pred)
