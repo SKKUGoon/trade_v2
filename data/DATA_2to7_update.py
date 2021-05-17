@@ -286,6 +286,81 @@ def gen_features(index_features, option_features):
     return features
 
 
+
+def MAIN_BACKTESTING(features, Y):
+    index_list = ['dow_oc', 'nasdaq_oc', 'snp_oc', 'kospi_co']
+    option_list = ['open_0_1', 'open_0_2']
+
+    date_inf = gen_date_inf(Y)
+
+    train_window = 130
+    test_start = 156  # 156
+    test_end = 488
+    bc = 1
+    ks = 1
+    cw_idx = None
+    cw_opt = None
+    cw_comb = None
+    cw_double = None
+    target_date = date_inf.index[(date_inf.weekth >= test_start) & (date_inf.weekth < test_end)].tolist()
+
+    prediction = pd.DataFrame(index=target_date,
+                              columns=['pred_idx', 'pred_idx_score', 'pred_opt', 'pred_opt_score', 'pred_double',
+                                       'pred_double_score'])
+
+    for t in range(test_start, test_end):
+        X_double_train = pd.DataFrame(
+            index=date_inf.index[(date_inf.weekth >= t - train_window) & (date_inf.weekth < t)],
+            columns=['index', 'option'])
+        X_double_test = pd.DataFrame(index=date_inf.index[date_inf.weekth == t], columns=['index', 'option'])
+
+        X_index_train = features.loc[date_inf.index[(date_inf.weekth >= t - train_window) & (date_inf.weekth < t)]][
+            index_list]
+        Y_train = Y.loc[date_inf.index[(date_inf.weekth >= t - train_window) & (date_inf.weekth < t)]]
+        X_index_test = features.loc[date_inf.index[date_inf.weekth == t]][index_list]
+
+        Y_train_sign = (Y_train >= 0).astype(int)
+
+        clf = svm.SVC(C=bc, gamma='scale', kernel='rbf', class_weight=cw_idx)
+        clf.fit(X_index_train, Y_train_sign)
+        pred_idx = clf.predict(X_index_test).tolist()
+        pred_idx_score = clf.decision_function(X_index_test).tolist()
+
+        X_double_train['index'] = clf.decision_function(X_index_train)
+        X_double_test['index'] = pred_idx_score
+
+        X_opt_train = features.loc[date_inf.index[(date_inf.weekth >= t - train_window) & (date_inf.weekth < t)]][
+            option_list]
+        X_opt_test = features.loc[date_inf.index[date_inf.weekth == t]][option_list]
+
+        clf = svm.SVC(C=bc, gamma='scale', kernel='rbf', class_weight=cw_opt)
+        clf.fit(X_opt_train, Y_train_sign)
+        pred_opt = clf.predict(X_opt_test).tolist()
+        pred_opt_score = clf.decision_function(X_opt_test).tolist()
+
+        X_double_train['option'] = clf.decision_function(X_opt_train)
+        X_double_test['option'] = pred_opt_score
+
+        clf = svm.SVC(C=bc, gamma='scale', kernel='rbf', class_weight=cw_double)
+        clf.fit(X_double_train, Y_train_sign)
+        pred_double = clf.predict(X_double_test)
+        pred_double_score = clf.decision_function(X_double_test)
+
+        prediction['pred_idx'].loc[X_index_test.index] = pred_idx
+        prediction['pred_opt'].loc[X_index_test.index] = pred_opt
+        prediction['pred_idx_score'].loc[X_index_test.index] = pred_idx_score
+        prediction['pred_opt_score'].loc[X_index_test.index] = pred_opt_score
+        prediction['pred_double'].loc[X_index_test.index] = pred_double
+        prediction['pred_double_score'].loc[X_index_test.index] = pred_double_score
+
+    result = pd.concat([prediction, Y.loc[prediction.index]], axis=1)
+
+    return result
+
+
+
+
+
 if __name__ == '__main__':
     ##### Made By Y #####
     ##### WEEKLY UPDATE #####op
@@ -297,3 +372,5 @@ if __name__ == '__main__':
     feat = gen_features(index_features=idx_features,
                         option_features=opt_features)
     y = gen_target(feat)
+
+    rrs = MAIN_BACKTESTING(feat, y)
