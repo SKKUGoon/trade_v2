@@ -145,7 +145,8 @@ class Kiwoom(QAxWidget):
 
     def _receive_tr_data(self, screen_num, rq_name, tr_code, record, prev_next, **kwarg):
         # Order
-        if "ORD" in tr_code:
+        print(tr_code)
+        if "ORD" in tr_code or "CANCEL" in tr_code:
             order_num = self._get_comm_data(tr_code, '', 0, '주문번호')
             # self.order_response.update({'order_num': order_num})
 
@@ -257,7 +258,6 @@ class Kiwoom(QAxWidget):
             self.order_cancel = res
         elif table == 'account_real_time':
             self.account_real = res
-            print('realtime', self.account_real)
 
     # Transaction receive method #
     @u_accepts({'id': str})
@@ -274,7 +274,6 @@ class Kiwoom(QAxWidget):
         if not self.connect_status:
             raise KiwoomConnectionError("Kiwoom server not connected")
         res = self.dynamicCall(*comm_rq_data(rq_name, tr_code, prev_next, screen_num))
-        print('herecommrq')
         if res != 0:  # Successful only if 0
             t = datetime.datetime.now()
             err = getattr(ReturnCode, "CAUSE").get(res)
