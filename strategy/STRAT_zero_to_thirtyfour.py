@@ -16,6 +16,8 @@ class FTZeroThirtyFour(FTManager):
             end = ['163400']
 
         else:
+            # state = ['144200', '144300']
+            # limit = ['144320']
             state = ['145900', '150000']
             limit = ['150020']
             end = ['153400']
