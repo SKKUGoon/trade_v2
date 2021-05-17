@@ -147,6 +147,28 @@ class TwoToSeven(QRunnable):
             else:
                 return res[0][1]
 
+    def chk_submit(self, screen_num:str, order_quant:int, buy_sell:int, asset, strategy_name:str='TTS'):
+        # Check Order
+        while True:
+            try:
+                cond = f"SCREEN_NUM='{screen_num}'"
+                submitted = self.local.select_db(
+                    target_table='RT_TR_S', target_column=['ORDER_STATUS'], condition1=cond
+                )[0][0]
+            except Exception as e:
+                continue
+
+            if submitted == '접수':
+                self.log.critical(f'[THREAD STATUS] >>> (BID) {strategy_name} Order is in')
+                self.chk_order(screen_num, buy_sell, asset, order_quant)
+                self.log.critical(f'[THREAD STATUS] >>> (BID) {strategy_name} Order Check Done')
+                break
+            else:
+                self.log.error(f'[THREAD STATUS] >>> {strategy_name} Order is not in')
+                return
+        self.log.critical(
+            f'[THREAD STATUS] >>> {strategy_name} Resulting Quantity {self.true_quant}'
+        )
 
     def chk_order(self, screen_num, sellbuy, asset, original_q):
         self.log.critical("Checking Not-executed Orders.")
@@ -275,26 +297,10 @@ class TwoToSeven(QRunnable):
             return
 
         # Check Order
-        while True:
-            try:
-                cond = f"SCREEN_NUM='1000'"
-                submitted = self.local.select_db(
-                    target_table='RT_TR_S', target_column=['ORDER_STATUS'], condition1=cond
-                )[0][0]
-            except Exception as e:
-                continue
-
-            if submitted == '접수':
-                self.log.critical('[THREAD STATUS] >>> (BID) TTS Order is in')
-                self.chk_order('1000', 2, self.atm, q)
-                self.log.critical('[THREAD STATUS] >>> (BID) TTS Order Check Done')
-                break
-            else:
-                self.log.error('[THREAD STATUS] >>> TTS Order is not in')
-                return
-        self.log.critical(
-            f'[THREAD STATUS] >>> TTS Strat Resulting Quantity {self.true_quant}'
-        )
+        self.chk_submit(screen_num='1000',
+                        order_quant=q,
+                        buy_sell=2,
+                        asset=self.atm)
 
         # Ask
         while True:

@@ -15,6 +15,7 @@ from strategy.FACTORY_fixed_time import FTFactory
 from strategy.STRAT_cms import FTCMS
 from strategy.STRAT_zero_to_thirtyfour import FTZeroThirtyFour
 
+from typing import Tuple
 import datetime
 import threading
 
@@ -117,8 +118,21 @@ class CMS(QRunnable):
                 self.order.send_order_fo(**cancel)
                 continue
             else:
-                return res[0][1]
+                break
+        return res[0][1]
 
+
+    def _get_open_close(self, opt_dict, asset:str) -> Tuple:
+        """
+        If the there are no trade made during 'ontime'
+        last tick price of 'offtime' will become open, and close.
+        """
+        try:
+            assert len(opt_dict['ontime'][asset]) > 0
+            open, close = opt_dict['ontime'][asset][0], opt_dict['ontime'][asset][-1]
+        except AssertionError:
+            open, close = opt_dict['offtime'][asset], opt_dict['offtime'][asset]
+        return open, close
 
     def chk_order(self, screen_num, sellbuy, asset, original_q):
         self.log.critical("Checking Not-executed Orders.")
@@ -162,8 +176,10 @@ class CMS(QRunnable):
                 real_cancel = self.chk_cancel(
                     screen_num, sellbuy, asset, original, unexec
                 )
+                cond = f"code = '{asset}'"
                 time = self.local.select_db(target_table='RT_Option',
-                                            target_column=['server_time', 'p_current'])[0]
+                                            target_column=['server_time', 'p_current'],
+                                            condition1=cond)[0]
 
                 try:
                     assert int(real_cancel) == int(unexec)  # If chk_cancel changed the cancelled value
@@ -176,9 +192,9 @@ class CMS(QRunnable):
                 new_quantity = self.money // (float(time[1]) * 250000)  # spent
                 original_q = new_quantity
 
-                new_order = order_base(name='tts', scr_num=screen_num, account=self.order.k.account_num[0],
+                new_order = order_base(name='cms', scr_num=screen_num, account=self.order.k.account_num[0],
                                        asset=asset, buy_sell=sellbuy, trade_type=1, quantity=new_quantity,
-                                       order_type=1, price=float(time[1]))
+                                       order_type=4, price=float(time[1]))
                 self.true_quant += new_quantity
                 self.order.send_order_fo(**new_order)
 
@@ -195,20 +211,38 @@ class CMS(QRunnable):
         atm = asset_code_gen(values, 'call_option', datetime.datetime.now(), bfaf)
         return atm
 
+    def chk_submit(self, screen_num:str, order_quant:int, buy_sell:int, asset:int, strategy_name:str='TTS'):
+        # Check Order
+        while True:
+            try:
+                cond = f"SCREEN_NUM='{screen_num}'"
+                submitted = self.local.select_db(
+                    target_table='RT_TR_S', target_column=['ORDER_STATUS'], condition1=cond
+                )[0][0]
+            except Exception as e:
+                continue
+
+            if submitted == '접수':
+                self.log.critical(f'[THREAD STATUS] >>> (BID) {strategy_name} Order is in')
+                self.chk_order(screen_num, buy_sell, asset, order_quant)
+                self.log.critical(f'[THREAD STATUS] >>> (BID) {strategy_name} Order Check Done')
+                break
+            else:
+                self.log.error(f'[THREAD STATUS] >>> {strategy_name} Order is not in')
+                return
+        self.log.critical(
+            f'[THREAD STATUS] >>> {strategy_name} Resulting Quantity {self.true_quant}'
+        )
+
     def run(self):
         self.log.debug(
             f'[THREAD STATUS] >>> CMS Running on {threading.current_thread().getName()}'
         )
-        if self.morning is True:
+        if self.morning or self.maturity:
             self.log.debug(
                 f'[THREAD STATUS] >>> CMS Breaking on {threading.current_thread().getName()}. Not Afternoon'
             )
             return
-
-        if self.maturity is True:
-            self.log.debug(
-                f'[THREAD STATUS] >>> CMS Breaking on {threading.current_thread().getName()}. Maturity'
-            )
 
         # Connection to Local Database
         loc = r'D:\trade_db\local_trade._db'
@@ -217,7 +251,10 @@ class CMS(QRunnable):
 
         # Zero to ThirtyFour Minute
         self.zttf = False
-        opt_price = dict()
+        opt_price = {
+            'ontime': {},
+            'offtime': {},
+        }
         while True:
             try:
                 time = self.local.select_db(
@@ -228,12 +265,18 @@ class CMS(QRunnable):
                     target_column=['code', 'server_time', 'p_current']
                 )
                 for c, t, p in opt:
-                    opt_price[c] = dict()
-                    if self.zttf_timeline[0] < t < self.zttf_timeline[1]:
-                        if 'open' in opt_price[c].keys():
-                            opt_price[c]['close'] = float(p)
+                    if self.zttf_timeline[0] <= t <= self.zttf_timeline[1]:
+                        if c not in opt_price['ontime'].keys():
+                            opt_price['ontime'][c] = []
+                            opt_price['ontime'][c].append(p)
                         else:
-                            opt_price[c]['open'] = float(p)
+                            if len(opt_price['ontime'][c]) == 1:
+                                opt_price['ontime'][c].append(p)
+                            else:
+                                opt_price['ontime'][c][1] = p
+                    elif t < self.zttf_timeline[0]:
+                        if c not in opt_price['offtime'].keys():
+                            opt_price['offtime'][c] = p
 
             except Exception as e:
                 self.log.error(e)
@@ -245,70 +288,50 @@ class CMS(QRunnable):
 
             if time[0] >= self.zttf_timeline[1]:
                 atm_3 = float(time[1])
-                for k, val in opt_price.items():  # If no trade made, use the most recent observation as value
-                    if 'open' not in val.keys():
-                        for c, t, p in opt:
-                            if k == c:
-                                opt_price[c]['open'], opt_price[c]['close'] = float(p), float(p)
+                print(time)
                 break
-        print(opt_price)
+        print(opt_price)  # TODO : Delete After DEBUG
         atm = self._create_atm(atm_3)
-        print(atm)
         zttf_signal = True
         try:
-            assert atm in opt_price.keys(), 'Due to Volatility, atm not in atm candidate'
+            cond1 = atm in opt_price['offtime'].keys()
+            cond2 = atm in opt_price['ontime'].keys()
+            assert cond1 or cond2, 'Due to Volatility, atm not in atm candidate'
         except AssertionError as e:
             self.log.error(e)
             zttf_signal = False
-            return
-        open59, close59 = (opt_price[atm]['open'], opt_price[atm]['close'])
+        open59, close59 = self._get_open_close(opt_dict=opt_price,
+                                               asset=atm)
         self.log.debug(f"Asset: {atm}, Price at {open59}, {close59}")
-        zttf_res = prediction(ATM_index=atm,
-                              price_open_1459=open59,
-                              price_close_1459=close59)
-        zttf_action, zttf_score = zttf_res.to_numpy().tolist()[-1]
+        zttf_res = prediction(ATM_index=float(atm_3),
+                              price_open_1459=float(open59),
+                              price_close_1459=float(close59))
+        zttf_action, zttf_score = (zttf_res.loc[int(self.ymd)]['pred'],
+                                   zttf_res.loc[int(self.ymd)]['pred_score'])
+        self.log.debug(f"Signal is {zttf_action}, score is {zttf_score}")
         if zttf_signal and zttf_action == 1:
             self.zttf = True
-            self.zttf_quant = 0
+            self.true_quant = 0
             self.log.critical(
-                f'[THREAD STATUS] >>> ZTTF Signal On. Signal is {zttf_action}, score is {zttf_score}'
+                f'[THREAD STATUS] >>> ZTTF Signal On.'
             )
-            q = self.money // ((float(time[1]) + 0.05) * 250000)
+            q = self.money // ((float(close59) + 0.05) * 250000)
             sheet = order_base(name='zttf', scr_num='3000', account=self.order.k.account_num[0],
-                               asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=(float(time[1]) + 0.01))
+                               asset=atm, buy_sell=2, trade_type=1, quantity=q, price=(float(close59) + 0.01))
             self.log.critical(f'[THREAD STATUS] >>> (BID) Sending Order {sheet}')
             self.order.send_order_fo(**sheet)
-            self.zttf_quant += q
+            self.true_quant += q
 
-            while True:
-                try:
-                    cond = f"SCREEN_NUM='3000'"
-                    submitted = self.local.select_db(
-                        target_table='RT_TR_S', target_column=['ORDER_STATUS'], condition1=cond
-                    )[0][0]
-                except Exception as e:
-                    continue
-
-                if submitted == '접수':
-                    self.log.critical('[THREAD STATUS] >>> (BID) ZTTF Order is in')
-                    self.chk_order('3000', 2, atm_3, self.zttf_quant)
-                    self.log.critical('[THREAD STATUS] >>> (BID) ZTTF Order Check Done')
-                else:
-                    self.log.error('[THREAD STATUS] >>> ZTTF Order is not in. ')
-                    return
-                self.log.critical(
-                    f'[THREAD STATUS] >>> ZTTF Strat Resulting Quantity {self.zttf_quant}'
-                )
-        else:
-            self.zttf = False
-            self.log.critical(
-                f'[THREAD STATUS] >>> ZTTF Signal Off. Signal is {zttf_action}, score is {zttf_score}'
+            self.chk_submit(screen_num='3000',
+                            order_quant=q,
+                            buy_sell=2,
+                            asset=atm,
+                            strategy_name='ZTTF')
+            self.log.debug(
+                f'[THREAD STATUS] >>> ZTTF Done. Total Quantity: {q} Waiting For CMS'
             )
 
         # Get CMS Data
-        self.log.debug(
-            '[THREAD STATUS] >>> ZTTF Done. Waiting For CMS'
-        )
         path_31_34 = list()
         target = 0
         self.atm = get_today_asset_code()
@@ -357,39 +380,28 @@ class CMS(QRunnable):
                 self.log.critical(f'[THREAD STATUS] >>> (BID) Sending Order {sheet}')
                 self.order.send_order_fo(**sheet)
                 self.true_quant += q
+
+                # Check Order
+                self.chk_submit(screen_num='2000',
+                                order_quant=q,
+                                buy_sell=2,
+                                asset=self.atm)
+
             else:
                 self.log.critical(f'[THREAD STATUS] >>> Inheriting ZTTF Asset. Quantity {self.zttf_quant}')
                 return  # ZTTF Strategy already bought the same asset as CMS
         else:
             self.log.critical(f'[THREAD STATUS] >>> CMS Signal Off. Terminating. Signal is {cms_action}')
             # TODO sell ZTTF
-            sheet = order_base(
-                name='zttf', scr_num='3000', account=self.order.k.account_num[0],
-                asset=self.atm, buy_sell=1, trade_type=1, quantity=int(self.zttf_quant),
-                price=float(time[1]) - 0.05
-            )
-            self.order.send_order_fo(**sheet)
-            return
-
-        # Check Order
-        while True:
-            try:
-                cond = f"SCREEN_NUM='2000'"
-                submitted = self.local.select_db(
-                    target_table='RT_TR_S', target_column=['ORDER_STATUS'], condition1=cond
-                )[0][0]
-            except Exception as e:
-                continue
-
-            if submitted == '접수':
-                self.log.critical('[THREAD STATUS] >>> (BID) CMS Order is in')
-                self.chk_order('2000', 2, self.atm, q)
-                self.log.critical('[THREAD STATUS] >>> (BID) CMS Order Check Done')
-                break
-            else:
-                self.log.error('[THREAD STATUS] >>> CMS Order is not in')
+            if self.zttf is False:
                 return
-        self.log.critical(
-            f'[THREAD STATUS] >>> CMS Strat Resulting Quantity {self.true_quant}'
-        )
+            else:
+                sheet = order_base(
+                    name='zttf', scr_num='3000', account=self.order.k.account_num[0],
+                    asset=self.atm, buy_sell=1, trade_type=1, quantity=int(self.zttf_quant),
+                    price=float(time[1]) - 0.05
+                )
+                self.order.send_order_fo(**sheet)
+
+
         return
