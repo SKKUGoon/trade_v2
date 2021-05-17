@@ -572,6 +572,6 @@ if __name__ == '__main__':
     asset_call = get_today_asset_code()
     today_pred = cms_prediction(opt_path_call, co_return)
     print(today_pred)
-
+    a = cms_prediction_manual(opt_path_call, co_return)
 # asset_call = get_today_asset_code()
 # opt_prc_today = get_today_path(asset_call)
