@@ -303,7 +303,7 @@ class CMS(QRunnable):
         open59, close59 = self._get_open_close(opt_dict=opt_price,
                                                asset=atm)
         self.log.debug(f"Asset: {atm}, Price at {open59}, {close59}")
-        zttf_res = prediction(ATM_index=float(atm_3),
+        zttf_res = prediction(ATM_index=atm_3,
                               price_open_1459=float(open59),
                               price_close_1459=float(close59))
         zttf_action, zttf_score = (zttf_res.loc[int(self.ymd)]['pred'],

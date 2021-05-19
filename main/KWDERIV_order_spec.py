@@ -36,7 +36,7 @@ class OrderSpec(QMainWindow):
         self.k = k
 
         # MySQL connection
-        self.iramdb = MySQLDBMethod(self.cfg, 'main')
+        self.iramdb = MySQLDBMethod(None, 'main')
 
         # Exception Dates
         self.maturity = self._exception_date('MaturityDay')

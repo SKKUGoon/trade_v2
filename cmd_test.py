@@ -31,5 +31,6 @@ if __name__ == '__main__':
             time.sleep(10)
         else:
             break
+    # ord = OrderSpec.instance(k)
     trd = TradeBot(k)
     app.exec()
