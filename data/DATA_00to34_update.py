@@ -212,7 +212,7 @@ def get_today_path(ATM_index=418.68, price_open_1459=6.62, price_close_1459=6.52
     return today_path, today_path_close
 
 
-def get_9_15_signal(opt_path_call, opt_path_call_close):
+def get_9_15_signal(opt_path_call:pd.DataFrame, opt_path_call_close:pd.DataFrame):
     intraday_9_15_sg = list()
     for c in opt_path_call_close.columns:
         if int(c) >= 900 and int(c) < 1500:
@@ -226,7 +226,7 @@ def get_9_15_signal(opt_path_call, opt_path_call_close):
 
     return X_9_15_call_opt
 
-def get_12_15_signal(opt_path_call, opt_path_call_close):
+def get_12_15_signal(opt_path_call:pd.DataFrame, opt_path_call_close:pd.DataFrame):
     intraday_12_15_sg = list()
     for c in opt_path_call_close.columns:
         if int(c) >= 1200 and int(c) < 1500:
@@ -250,6 +250,9 @@ def prediction(ATM_index, price_open_1459, price_close_1459, train_window=65, nf
 
     X = pd.concat([opt_path_call[signal_list], today_path])
     X_close = pd.concat([opt_path_call_close[signal_list], today_path_close])
+
+    X = X.astype(float)
+    X_close = X_close.astype(float)
 
     X_9_15 = get_9_15_signal(X, X_close)
     X_12_15 = get_12_15_signal(X, X_close)
@@ -307,6 +310,6 @@ def prediction(ATM_index, price_open_1459, price_close_1459, train_window=65, nf
     return prediction
 
 if __name__ == '__main__':
-    pred = prediction(ATM_index=423.23, price_open_1459=6.10, price_close_1459=6.08)
+    pred = prediction(ATM_index=421.22, price_open_1459=6.33, price_close_1459=6.34)
 
     print(pred)
