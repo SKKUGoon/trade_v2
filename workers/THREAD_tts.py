@@ -281,11 +281,12 @@ class TwoToSeven(QRunnable):
         cscr_pred = [self.models[0].decision_function(self.model1_feat)[0],
                      self.models[1].decision_function([self.model2_feat])[0]]
         final_pred = self.models[2].predict([cscr_pred])[0]  # If True, enter market
+        final_pred_scr = self.models[2].predict([cscr_pred])[0]
 
         # Bid
         if final_pred is True or final_pred == 1:
             self.true_quant = 0
-            self.log.critical(f'[THREAD STATUS] >>> TTS Signal On. Signal is {final_pred}')
+            self.log.critical(f'[THREAD STATUS] >>> TTS Signal {final_pred}. Signal is {final_pred_scr}')
             q = self.money // (float(time[1]) * 250000)
             sheet = order_base(name='tts', scr_num='1000', account=self.order.k.account_num[0],
                                asset=self.atm, buy_sell=2, trade_type=1, quantity=q, price=float(time[1]))
