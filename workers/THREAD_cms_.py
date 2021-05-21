@@ -332,6 +332,11 @@ class CMS(QRunnable):
             )
 
         # Get CMS Data
+        self.zttf = True
+
+        self.log.debug(f'[THREAD STATUS] >>> Thread will wait 60s to wait for db to catch up')
+        QThread.sleep(60)
+
         path_31_34 = list()
         target = 0
         self.atm = get_today_asset_code()
@@ -396,12 +401,13 @@ class CMS(QRunnable):
             if self.zttf is False:
                 return
             else:
+                print('SELL NOW SELL NOW')
                 sheet = order_base(
                     name='zttf', scr_num='3000', account=self.order.k.account_num[0],
                     asset=self.atm, buy_sell=1, trade_type=1, quantity=int(self.zttf_quant),
                     price=float(time[1]) - 0.05
                 )
-                self.order.send_order_fo(**sheet)
+                # self.order.send_order_fo(**sheet)
 
 
         return
