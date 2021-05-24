@@ -29,6 +29,13 @@ class TradeBot(TradeBotUtil):
         print('This Module is to purchase 2 ~ 7 Put Option.')
         # Necessary Modules
         super().__init__()
+
+        # DB Connect
+        loc = r'D:\trade_db\local_trade._db'
+        self.localdb = LocalDBMethods2(loc)
+        self.localdb.conn.execute("PRAGMA journal_mode=WAL")
+        self.prep_db()
+
         self.kiwoom = k
         self.spec = OrderSpec.instance(k)
         self.live = LiveDBCon.instance(k)
@@ -39,12 +46,12 @@ class TradeBot(TradeBotUtil):
         self.create_threadpool()
         self.timer_start_thread()
 
-        # DB Connect
-        loc = r'D:\trade_db\local_trade._db'
-        self.localdb = LocalDBMethods2(loc)
-        self.localdb.conn.execute("PRAGMA journal_mode=WAL")
-
         self.iram = MySQLDBMethod(None, 'main')
+
+    def prep_db(self):
+        prep_del = ['RT_Option', 'RT_TR_S', 'RT_TR_C', 'RT_TR_E']
+        for table in prep_del:
+            self.localdb.delete_table(table)
 
     def _time_until(self, target:datetime.datetime, unit='msec'):
         called = datetime.datetime.strptime(
@@ -84,7 +91,8 @@ class TradeBot(TradeBotUtil):
         self.log.critical('TwoToSeven Thread Starting')
         tts = TwoToSeven(orderspec=self.spec,
                          live=self.live,
-                         morning=self.morning)
+                         morning=self.morning,
+                         cmsext=False)
         self.pool.start(tts)
 
     def _thread_tasks_cms(self):
@@ -100,7 +108,8 @@ class TradeBot(TradeBotUtil):
         self.log.critical('CMSExt Thread Starting')
         cmsext = CMSExt(orderspec=self.spec,
                         live=self.live,
-                        morning=self.morning)
+                        morning=self.morning,
+                        cmsext=False)
         self.pool.start(cmsext)
 
     def _get_target_time(self):
