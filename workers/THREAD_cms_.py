@@ -322,6 +322,78 @@ class CMS(QRunnable):
             self.order.send_order_fo(**sheet)
             self.true_quant += q
 
+        ####################### IF ERROR DROP FROM HERE ########################
+        opt_price = {
+            'ontime': {},
+            'offtime': {},
+        }
+        while True:
+            try:
+                time = self.local.select_db(
+                    target_table='RealTime_Index',
+                    target_column=['servertime', 'price'])[0]
+                opt = self.local.select_db(
+                    target_table='RT_Option',
+                    target_column=['code', 'server_time', 'p_current']
+                )
+                for c, t, p in opt:
+                    if self.zttf_timeline[0] <= t <= self.zttf_timeline[1]:
+                        if c not in opt_price['ontime'].keys():
+                            opt_price['ontime'][c] = []
+                            opt_price['ontime'][c].append(p)
+                        else:
+                            if len(opt_price['ontime'][c]) == 1:
+                                opt_price['ontime'][c].append(p)
+                            else:
+                                opt_price['ontime'][c][1] = p
+                    elif t < self.zttf_timeline[0]:
+                        if c not in opt_price['offtime'].keys():
+                            opt_price['offtime'][c] = p
+
+            except Exception as e:
+                self.log.error(e)
+                self.log.error('Index Value Missing. Restart')
+                continue
+
+            if time[0] == '0':
+                continue
+
+            if time[0] >= self.zttf_timeline[1]:
+                atm_3 = float(time[1])
+                print(time)
+                break
+        print(opt_price)  # TODO : Delete After DEBUG
+        atm = self._create_atm(atm_3)
+        zttf_signal = True
+        try:
+            cond1 = atm in opt_price['offtime'].keys()
+            cond2 = atm in opt_price['ontime'].keys()
+            assert cond1 or cond2, 'Due to Volatility, atm not in atm candidate'
+        except AssertionError as e:
+            self.log.error(e)
+            zttf_signal = False
+        open59, close59 = self._get_open_close(opt_dict=opt_price,
+                                               asset=atm)
+        self.log.debug(f"Asset: {atm}, Price at {open59}, {close59}")
+        zttf_res = prediction(ATM_index=atm_3,
+                              price_open_1459=float(open59),
+                              price_close_1459=float(close59))
+        zttf_action, zttf_score = (zttf_res.loc[int(self.ymd)]['pred'],
+                                   zttf_res.loc[int(self.ymd)]['pred_score'])
+        self.log.debug(f"Signal is {zttf_action}, score is {zttf_score}")
+        if zttf_signal and zttf_action == 1:
+            self.zttf = True
+            self.true_quant = 0
+            self.log.critical(
+                f'[THREAD STATUS] >>> ZTTF Signal On.'
+            )
+            q = self.money // ((float(close59) + 0.05) * 250000)
+            sheet = order_base(name='zttf', scr_num='3000', account=self.order.k.account_num[0],
+                               asset=atm, buy_sell=2, trade_type=1, quantity=q, price=(float(close59) + 0.05))
+            self.log.critical(f'[THREAD STATUS] >>> (BID) Sending Order {sheet}')
+            self.order.send_order_fo(**sheet)
+            self.true_quant += q
+
             self.chk_submit(screen_num='3000',
                             order_quant=q,
                             buy_sell=2,
@@ -330,9 +402,9 @@ class CMS(QRunnable):
             self.log.debug(
                 f'[THREAD STATUS] >>> ZTTF Done. Total Quantity: {q} Waiting For CMS'
             )
-
+        ####################### IF ERROR DROP FROM HERE ########################
         # Get CMS Data
-        self.zttf = True
+        # self.zttf = True
 
         self.log.debug(f'[THREAD STATUS] >>> Thread will wait 60s to wait for db to catch up')
         QThread.sleep(60)
