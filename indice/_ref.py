@@ -38,3 +38,6 @@ while True:
     y_vec[-1] = rand_val
     line1 = live_plotter(x_vec,y_vec,line1, pause_time=1)
     y_vec = np.append(y_vec[1:],0.0)
+
+
+# line1.axes.set_xticklabels(date_vector) to ac
