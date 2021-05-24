@@ -24,7 +24,7 @@ import pickle
 class TwoToSeven(QRunnable):
     ymd = datetime.datetime.now().strftime('%Y%m%d')
 
-    def __init__(self, orderspec:OrderSpec, live:LiveDBCon, morning:bool, leverage=0.5):
+    def __init__(self, orderspec:OrderSpec, live:LiveDBCon, morning:bool, cmsext:bool, leverage=0.5):
         super().__init__()
         self.morning = morning
         self.order = orderspec
@@ -34,7 +34,9 @@ class TwoToSeven(QRunnable):
         self.timeline, self.timelimit, self.end = parm.timing(FTTwoSeven())
         self.train_models()
         self.get_trade_parmas(leverage)
-
+        if cmsext is not False:
+            leverage = 1  # Because extending cms would leave
+                          # half of the money on the table
 
     def _create_atm(self, values) -> str:
         mat = get_exception_date('MaturityDay')
