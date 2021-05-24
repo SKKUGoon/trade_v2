@@ -13,12 +13,12 @@ class FTCMSExt(FTManager):
         today = datetime.datetime.now().strftime('%Y%m%d')
         if (today in sat) or (today in fb):
             states = ['']
-            limit = ['']
+            limit = ['100005']
             end = ['095500', '100200']
 
         else:
             states = ['']
-            limit = ['']
+            limit = ['090005']
             end = ['085500', '090200']
         return states, limit, end
 
