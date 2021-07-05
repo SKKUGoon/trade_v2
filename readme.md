@@ -2,8 +2,8 @@
 
 This trading program uses kiwoom to trade.
 
-**code_** includes error message details, error code details etc. 
-**data** includes data updating method to execute each fixed time strategy
+**code_ includes error message details, error code details etc. 
+**data includes data updating method to execute each fixed time strategy
 **indice** deprecated
 **main**
 - KW ... : Base class(Kiwoom)
